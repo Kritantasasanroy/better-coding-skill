@@ -1,0 +1,13 @@
+{
+  "name": "better-coding",
+  "version": "1.0.0",
+  "description": "Domain-model-first, object-oriented coding standard with an independent audit loop. Requires a written domain model before implementation, bans functional style and bare any/Any, minimizes branching, and audits every change against a fixed rule set before it counts as done.",
+  "author": {
+    "name": "Kritantasasanroy",
+    "url": "https://github.com/Kritantasasanroy"
+  },
+  "homepage": "https://github.com/Kritantasasanroy/better-coding-skill",
+  "repository": "https://github.com/Kritantasasanroy/better-coding-skill",
+  "license": "MIT",
+  "keywords": ["domain-modeling", "object-oriented", "code-review", "code-quality", "compliance"]
+}

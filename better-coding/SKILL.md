@@ -1,0 +1,318 @@
+---
+name: better-coding
+description: >
+  Write code under continuous enforcement from project start. A cheap mechanical triage pass runs on
+  everything, then a Warden agent independently audits what triage flagged and what it couldn't
+  check, against a fixed rule set (the Law) covering domain modeling, object-oriented design,
+  typing, and over-engineering, penalizes violations, and forces rework until the goal is fully met
+  with zero open violations. Scales to any codebase size via triage-first, chunked audits, and a
+  lite/full/deep mode so cost matches how much independent verification you actually need mid-loop,
+  never at the final gate. Negotiates precedence against the project's own AGENTS.md/CLAUDE.md
+  instead of assuming it. Use for any feature, fix, or refactor where quality matters. Pairs with
+  better-coding-review, which audits a whole existing codebase and can hand fixes to this loop.
+argument-hint: "[lite|full|deep]"
+---
+
+# better-coding
+
+Code doesn't get written here on trust. It gets written, triaged mechanically, audited by an
+independent **Warden** wherever mechanics alone can't settle it, penalized wherever it breaks the
+Law, reworked, and audited again. That cycle repeats until the goal is fully met and the ledger comes
+back empty.
+
+This is one of two paired skills. `better-coding` runs while code is being written, from the start
+of a project or task. Its sibling, `better-coding-review`, audits code that already exists, produces
+a report, and, only with the user's go-ahead, hands violations to this loop to fix. Both share the
+same rule set and the same triage.
+
+Four files carry the detail. Read each one when the phase that needs it begins, not before:
+
+- [references/law.md](references/law.md): the enforceable rules, each with a stable ID.
+- [references/triage.md](references/triage.md): the mechanical pass, patterns and chunking, that
+  runs before any agent gets spawned.
+- [references/warden.md](references/warden.md): the auditor's brief, handed to the Warden verbatim.
+- [references/ledger.md](references/ledger.md): the penalty schedule and the ledger format.
+
+## The two roles
+
+You are the **Builder**. You plan, you write, you fix, and you run triage yourself, it's `grep`, not
+judgment.
+
+The **Warden** is a separate agent with its own context, spawned only when triage can't settle the
+question on its own. It sees the code, the Law, and triage's leads, never your reasoning about why
+the code is fine. It's the only authority on the judgment-heavy rules. You don't audit those
+yourself, you don't argue a verdict into submission, and you don't get to declare yourself done on
+anything the Warden hasn't actually seen.
+
+## Mode: how much independent verification, and when
+
+Set with the skill argument (`/better-coding lite|full|deep`) or by the user saying so; default
+`full`. Mode controls the **judgment tier** only, triage always runs in full, on everything,
+regardless of mode, since it's nearly free.
+
+- **`lite`**: no Warden spawn during the loop. Triage's near-verdicts (C1/C2/C3-class findings) get
+  fixed directly. Triage's leads and every judgment-only rule (L3 reachability, L7 responsibility
+  depth, L25 domain-model quality, L28 branch shape, L31 orphan relationships, and anything not
+  pattern-matchable) get a self-check by the Builder against the Law, explicitly labeled
+  **SELF-CHECKED**, never CLEAN, those words mean different things and the ledger keeps them
+  separate. Cheapest, and honestly weaker on exactly the failure mode this system exists to catch:
+  a Builder rationalizing its own shortcut. Good for low-stakes, throwaway, or exploratory work.
+- **`full`** (default): triage narrows the Warden's job, then a real independent Warden pass runs
+  per slice, spawned with a lighter model (pass `model: "haiku"` to the `Agent` call) since a
+  triage-narrowed, per-slice diff is well within a smaller model's judgment. Independent, just
+  cheaper than defaulting to the strongest model for every routine round.
+- **`deep`**: same independence, no shortcuts. Full `law.md` and `warden.md`, default/strongest
+  model, no sampling, no triage-narrowing of what gets read in full.
+
+**The one rule mode never overrides:** Phase 8's gate audit, the last one before anything is called
+done, always runs as a genuine independent Warden pass, at `full` rigor or better, even in a `lite`
+session. `lite` mode buys speed in the iterative middle of the loop. It does not buy a way to skip
+independent verification entirely before commit, that would just be C4 with extra steps.
+
+## Precedence is negotiated, not assumed
+
+Most projects already have their own standard: `AGENTS.md`, `CLAUDE.md`, a doctrine file, a
+`.cursorrules`. The Law does not silently outrank or silently defer to any of them.
+
+The first time this skill runs in a repository this session, check for such files. If none exist,
+the Law applies on its own, say so, and move on. If any exist, ask the user, once, with
+`AskUserQuestion`:
+
+- **Project wins.** The project's file is authoritative; the Law fills only what it leaves unstated,
+  and never loosens what it locked down.
+- **Law wins.** This Law is authoritative; the project's file fills gaps instead.
+- **Hand in hand.** Both apply. A genuine conflict gets surfaced to the user the moment it's found,
+  instead of resolved by assumption.
+
+Record the answer in the charter. It holds for the rest of *this session only*, nothing about
+precedence is written to disk, and it is not asked again in this session once decided, including on
+a later conflict, that gets resolved by the standing choice, not a repeat question. A new session
+starts the negotiation fresh.
+
+## State
+
+Loop state lives in your session scratchpad, under `better-coding/`: `charter.md` and `ledger.md`.
+Never in the repository. Writing loop bookkeeping into the user's project is itself a scope
+violation (L13).
+
+---
+
+# The loop
+
+## Phase 0: Charter, mode, and precedence
+
+Don't write a line of code until all three exist.
+
+Resolve the mode and run the precedence negotiation above. Then write `charter.md`: the goal in one
+sentence, the mode, the precedence mode, and the **acceptance criteria** as a numbered list. Each one
+has to be individually checkable by running something: a test, a command, a request, an observed
+behavior. "Login works" isn't a criterion. "`POST /sessions` with a valid password returns 201 and a
+session cookie; with a wrong password, 401" is.
+
+Record the baseline too: current branch, `git rev-parse HEAD`, and whether the working tree was
+dirty at the start. Pre-existing uncommitted changes belong to the user, not you. List them, never
+revert them, and ask before touching them.
+
+Acceptance criteria are frozen once written. If one turns out to be wrong or impossible, stop and
+say so to the user. Don't quietly narrow them just to make the loop terminate.
+
+## Phase 1: Recon
+
+- Read the project's instruction files per the negotiated precedence, and any directory-level
+  guidance near the files you'll touch.
+- Search the repo for an existing solution before planning a new abstraction, helper, or dependency
+  (L11). Read the neighboring code and match its idiom.
+- Figure out what already owns this responsibility. Most work belongs on an existing type, not a new
+  one.
+
+## Phase 2: Domain model, then design
+
+For any non-trivial feature, L25 is not optional: before any class or function gets written, write
+down, in plain text:
+
+- What are the important domain objects?
+- What properties and behavior belong to each?
+- How do they relate to each other?
+- What states can each one be in?
+- What rules or invariants must always hold?
+- What should the API resources look like, given this model?
+
+This isn't a design document, a few lines per object is enough. Save it beside the charter; the
+Warden checks the implementation against it, in every mode including `lite`'s self-check. If a name
+like `FooManager` or `FooProcessor` shows up while doing this, stop and ask what real thing it's
+standing in for (L26), the answer usually replaces the manager with the thing itself.
+
+Only once the model is written: name the entities involved, the state each owns, and the behavior
+that belongs to each (L16). Say where the logic lives and why that's the right home for it. If your
+plan reads like a long function or a pipeline of transforms, the plan is wrong (L27), go find the
+entity it actually belongs to. Prefer polymorphism over branching on a type tag (L28).
+
+Then cut the work into slices. One slice is one coherent change (L18).
+
+## Phase 3: Build one slice
+
+Before writing the slice, walk the laziness ladder (L29): does this need to exist, is it already in
+the codebase, does the standard library do it, does the platform do it natively, does an installed
+dependency cover it, is it one line, only then write the minimum that works. This never overrides
+validation, error handling, security, or accessibility, those are written in full regardless of what
+rung you land on.
+
+Write the smallest coherent slice you can. Don't batch three slices together to save an audit round,
+in `full`/`deep` mode a large diff still buries violations and the revert penalty gets expensive on
+a pile of unrelated changes. (`lite` mode's cheapness comes from skipping the agent spawn, not from
+skipping this discipline, small slices stay small regardless of mode.)
+
+While you write, treat the Law as a constraint, not a checklist for later. Reread the Standing
+Orders section of the ledger, the rules you've already broken once, before every slice.
+
+## Phase 3.5: Triage
+
+Run [references/triage.md](references/triage.md)'s patterns against this slice's changed files.
+This costs `grep`, not tokens, do it every slice, every mode, no exception.
+
+Fix every near-verdict (C1/C2/C3-class) hit yourself before proceeding, these don't need a second
+opinion to confirm they're real. Carry every lead (Optional usage, generic-suffix names, module-level
+functions, orphan-class candidates, long functions) forward into whichever audit step comes next, as
+a pointer, not a pre-judged finding.
+
+## Phase 4: Audit
+
+What runs here depends on the mode set in Phase 0.
+
+**`lite`**: no spawn. Self-check the slice against `law.md`'s judgment-heavy rules (L3, L7, L16,
+L25, L26, L28, L31, and anything triage flagged as a lead) as rigorously as you can, list what you
+checked and what you concluded, and label the result **SELF-CHECKED**, not CLEAN. Proceed to
+Phase 5 treating any self-identified issue as a finding against yourself.
+
+**`full` / `deep`**: spawn the Warden. This is blocking, the next step depends entirely on the
+verdict.
+
+```
+Agent(
+  subagent_type: "general-purpose",
+  model: <"haiku" in full mode; omit (inherit default) in deep mode>,
+  run_in_background: false,
+  description: "Warden audit",
+  prompt: <the brief below>
+)
+```
+
+Pass **absolute** paths. The Warden is a fresh agent with no conversation context, so its `Read`
+cannot expand `~` or resolve anything relative to this file. Resolve this skill's own directory to a
+concrete absolute path first: it's wherever this SKILL.md actually loaded from, whether that's a
+user-level install (`~/.claude/skills/better-coding/`, e.g.
+`C:\Users\<you>\.claude\skills\better-coding\` on Windows) or a project-level one checked into the
+repo (`<repo-root>/.claude/skills/better-coding/`). If it isn't already obvious, check both for
+`references/law.md` and use whichever exists.
+
+The brief must contain, and nothing else that colors the judgment:
+
+- **`full` mode:** `Read <skill-dir>/references/cheatsheet.md and follow it exactly, that's the
+  rule set and the standing position for this round.` This is the condensed rulebook, one line per
+  rule instead of the full rationale and examples, it's what keeps a routine per-slice audit cheap.
+  **`deep` mode**, and **Phase 8's gate audit regardless of the session's mode**: `Read
+  <skill-dir>/references/warden.md and follow it exactly. Read <skill-dir>/references/law.md,
+  that's the rule set.`, the full files, no compression, this is the check that has to be
+  trustworthy on its own.
+- `Audit mode: diff.`
+- The repo path, the baseline ref, and the changed files.
+- Triage's leads for this slice (file:line, which pattern), so the Warden verifies and expands
+  instead of rediscovering them cold. In `full` mode, triage's near-verdicts you already fixed don't
+  need to be re-included, they're resolved; in `deep` mode, include them anyway so the Warden
+  confirms the fix rather than trusting your own report of it.
+- The negotiated precedence mode, and the project's instruction files to read under it.
+- The charter's goal, acceptance criteria, and this slice's domain model (from Phase 2).
+- The Standing Orders (repeat-offense rules), if there are any yet.
+
+Never include your own justification for a choice, a summary of what the code "does," or any hint of
+what verdict you're expecting. The Warden reads the code. That's all it gets.
+
+## Phase 5: Sentencing
+
+Apply [references/ledger.md](references/ledger.md). Record every finding with its rule ID, severity,
+points, and whether it came from a Warden verdict or a `lite`-mode self-check, the ledger keeps those
+distinct. Then work through the consequences:
+
+- **Any open violation**: you can't commit, and you can't call the work done.
+- **Any CAPITAL finding**: the slice doesn't get patched. Stash it
+  (`git stash push -m "better-coding penalty <n>" -- <files this iteration touched>`) and rewrite
+  from the clean base. Stash, never discard, and only the files this loop touched this iteration.
+- **15+ points in one round**: the whole slice goes back to Phase 2. The design was wrong, most
+  often a missed or wrong domain model, not just the code.
+- **A rule broken twice**: its points double, and it gets promoted into Standing Orders.
+- **A rule broken three times**: stop the loop and escalate to the user with the ledger. Two rounds
+  already failed to fix it, so a third one won't either.
+
+## Phase 6: Remediate
+
+Fix every finding. A MINOR finding can be contested exactly once, in writing, with a reason grounded
+in the code or the negotiated precedence. "It reads better" doesn't count. A contested finding goes
+back to the Warden next round (in `lite` mode, back to your own self-check); if it's upheld, it gets
+fixed and it counts double.
+
+Fixing means removing the cause. Silencing the check instead is a CAPITAL offense, every single
+time, and triage will likely catch you doing it on the very next slice.
+
+## Phase 7: Verify
+
+Run the real thing and paste the real output: the project's test command, linter, type checker,
+build. Then walk the charter and mark each acceptance criterion against evidence you actually
+produced yourself.
+
+A criterion is met when a command says so, not when the code looks correct and not because you
+reasoned it should work. If you couldn't run something, that criterion is **unverified**, and
+unverified doesn't count as met.
+
+## Phase 8: Gate
+
+Loop back to Phase 3 unless all of the following hold, at the same time:
+
+- Every acceptance criterion in the charter is met, with evidence attached.
+- **A genuine independent Warden audit**, at `full` rigor or better, over the full diff, after your
+  last edit, comes back CLEAN. If the session ran in `lite` mode throughout, this is the one point
+  where a real agent still gets spawned, once, before commit, regardless of mode. A SELF-CHECKED
+  result never satisfies this gate on its own.
+- The ledger shows zero open violations.
+- Tests, lint, type check, and build all pass on the current tree.
+
+The last audit has to run after the last change. A CLEAN verdict on a stale diff proves nothing at
+all.
+
+When the gate opens, commit per L19 and report back to the user: what got built, the domain model it
+was built from, the mode the session ran in, the evidence, and the final ledger, including everything
+that was penalized along the way. Report the ledger even when the run is clean. Especially then.
+
+## Circuit breaker
+
+The loop runs until the goal is met, but it doesn't spin forever. Stop and escalate, with the
+ledger, the blocker, and what you'd need to move forward, when:
+
+- The same rule has been broken three times.
+- An acceptance criterion needs a decision only the user can make.
+- Something external is blocking you: missing credentials, a broken dependency, an unavailable
+  service.
+- Two consecutive rounds produce no reduction in open violations.
+
+Escalating with a clear blocker is a correct outcome. Declaring victory on unverified work never is.
+
+## Never
+
+These aren't shortcuts. They're the CAPITAL offenses in [references/law.md](references/law.md), and
+none of them are negotiable, in any mode:
+
+- Deleting, skipping, or weakening a test to turn a build green.
+- `# noqa`, `# type: ignore`, `eslint-disable`, a bare `any`/`Any`, or a blind cast used to silence a
+  checker.
+- `except X: pass`, or catching an error only to hide it from whoever's calling you.
+- Claiming a command passed without running it, or reporting a verdict the Warden never gave, or
+  reporting SELF-CHECKED as CLEAN.
+- Skipping Phase 8's independent gate audit because the rest of the session ran in `lite` mode.
+- Editing the charter's acceptance criteria to fit whatever you ended up building.
+
+## After the loop
+
+For work headed toward a pull request, hand off to the repo's own `pr-conventions` and
+`pr-review-loop` skills, if they exist. This skill governs how the code gets written. Those govern
+how it ships. For an existing codebase that was never built under this loop, use
+`better-coding-review` first, it produces the report this skill's Phase 0 through 2 would otherwise
+have no way to generate for code nobody here wrote.
