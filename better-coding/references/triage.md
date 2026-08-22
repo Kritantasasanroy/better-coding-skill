@@ -47,21 +47,29 @@ dilutes attention on the code that actually carries the domain model. State the 
 in the report header, and treat it as overridable: a user who wants tests in scope says so, and gets
 the same pass with a smaller exclusion list, not a different mechanism.
 
-**3. Line count on the filtered set**, one call, not a per-file loop:
+**3. Line count on the filtered set**, one call, not a per-file loop, and not `xargs ... wc -l`:
 
 ```
-git ls-files [same filters] | tr '\n' '\0' | xargs -0 wc -l | tail -1
+git ls-files [same filters] | tr '\n' '\0' | xargs -0 cat | wc -l
 ```
 
-Never trust `xargs wc -l | tail -1` without checking `grep -c total` on its output first, past
-`xargs`'s per-call argument limit it silently splits into multiple batches and each one prints its
-own `total`, so `tail -1` grabs only the last batch. On a repository with hundreds of files this is
-not a hypothetical, use the `tr '\n' '\0' | xargs -0 wc -l` form above, or confirm the batch count is
-1 before trusting a plain `xargs wc -l`.
+`xargs wc -l | tail -1` looks safe and is not. Past `xargs`'s per-call argument limit it silently
+splits into multiple batches, and `wc -l` runs once per batch, each printing its own `total`, so
+`tail -1` grabs only the last batch's count, not the real one, and the failure is silent: no error,
+just a number that's wrong, often by a lot, on exactly the large repositories where getting scope
+right matters most. `-0` (null-delimited paths) does not fix this, it only protects against
+filenames with spaces or newlines, `xargs` can still split the batch regardless. The fix is
+structural, not a flag: pipe every file's content through `cat` first so there is only ever one
+`wc -l` invocation, on the fully concatenated stream, no matter how many batches `xargs` uses to run
+`cat`. If you ever do fall back to `xargs wc -l`, check `grep -c total` on its output, more than one
+match means the number is wrong and you should switch to the `cat | wc -l` form above.
 
-For reference, on a real 1,022-file repository: the full source set is 72,594 lines; filtering out
-tests, docs, and generated content drops that to 730 files and 27,181 lines, well under half. That
-difference is the whole reason filtering happens before anything else, not after.
+Scope is specific to the repository being audited: report the real file and line counts this run
+produced, not a number from a different run or a different repo. A useful sanity check, not a
+substitute for the real count: filtering out tests typically removes a large share of an
+application's tracked lines, often close to or more than half, since test code tends to be as large
+as or larger than the code it tests. If the filtered count barely moved, that's worth a second look
+at whether the exclusions actually matched anything.
 
 ## Patterns
 
@@ -128,12 +136,13 @@ For `better-coding-review`'s whole-repository mode, chunk by size, not by direct
 the large ones.
 
 1. `git ls-files` the source file set (per above).
-2. Get line counts with **one** `wc -l` call over the whole file list
-   (`git ls-files -z -- '*.py' ... | xargs -0 wc -l`), never a naive `xargs wc -l | tail -1` on a
-   large file set, `xargs` silently splits into multiple batches past its argument-length limit and
-   each batch prints its own `total`, so `tail -1` grabs only the last batch, not the real total.
-   Confirm with `grep -c total` on the output; more than one match means you undercounted. Build the
-   manifest as `path, lines`.
+2. Get real per-file line counts, this is a manifest (`path, lines`), not a single total, so it
+   needs one `wc -l` per file rather than the concatenated-`cat` trick above: run `wc -l` directly
+   against the file list (`git ls-files -z -- '*.py' ... | xargs -0 wc -l`), which is safe here
+   specifically because the per-file lines in its output are what get used, not its `total` line,
+   so a batch split doesn't corrupt anything you actually read. If you separately want the grand
+   total too, sum the manifest's own `lines` column instead of trusting whatever `total` line(s)
+   `wc` printed.
 3. Bin files into chunks with a target budget: **~6000 lines per chunk in `full` mode, ~1200 in
    `deep` mode.** These aren't the same kind of number. In `deep` mode every file in a chunk gets
    fully read, so the bin size caps a Warden's real reading load. In `full` mode a chunk's Warden
@@ -151,8 +160,11 @@ the large ones.
    mandatory Phase 8 gate audit in `better-coding` always get the full files, the compression is a
    `full`-mode-only trade and never applies to the one audit that has to be trustworthy on its own.
 
-For this repository (1,022 source files, 72,594 lines): `full` mode bins to roughly 12 chunks, not
-36, once the target moved from 2,000 to 6,000 lines, `deep` mode still bins to roughly 61.
+Chunk count is just filtered lines divided by the target: at the 6,000-line `full`-mode target that
+means one chunk per 6,000 lines of filtered source, `deep` mode's 1,200-line target means roughly
+5x that many chunks over the same filtered set, since it reads every file in full rather than a
+triage-narrowed slice of each chunk. Report the actual chunk count this run computed, from this
+run's real filtered line count, not a number from a prior run or a different repository.
 
 This keeps each Warden's job proportional to what it can actually read and judge carefully,
 regardless of whether the repository is 50 files or 5,000, while keeping `full` mode's spawn count

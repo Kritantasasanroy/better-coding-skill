@@ -120,8 +120,9 @@ Chunk the important file set per [triage.md](../better-coding/references/triage.
 target **~3000 lines per chunk**: large enough to keep spawn count reasonable, small enough that a
 cheap model reads every file in its chunk in full, not a sample. Unlike `full` mode's old
 triage-narrowed chunks, every chunk here gets completely read, that's what makes this pass
-exhaustive rather than another partial one. On the reference 730-file, 27,181-line filtered set,
-that's roughly 9 to 10 chunks.
+exhaustive rather than another partial one. Chunk count is just this run's real filtered line count
+divided by 3,000, report the actual number, computed from the actual scope, not a figure carried
+over from a previous audit or a different repository.
 
 Spawn one Warden per chunk, cheapest available model, [cheatsheet.md](../better-coding/references/cheatsheet.md)
 instead of the full `law.md`/`warden.md`:

@@ -90,15 +90,18 @@ your work against them.
 
 ## What actually happens when you run it
 
-Most tool READMEs skip this part. Here it is in full, using real numbers from a run against an
-actual production repository: 1,022 source files, 72,594 lines.
+Most tool READMEs skip this part. Here it is in full. The steps below are described generically on
+purpose, not with numbers from one specific repository presented as if they're typical, since your
+repo's real file count, line count, and chunk count will be its own and nobody else's. Every number
+that matters gets reported fresh, from the actual scope of the actual run, every time.
 
 **1. Scope.** First question, always: how many files, how many lines. Not every tracked file
 deserves a review. `better-coding-review` excludes tests, docs, lockfiles, and generated output by
 default, since that's not where the domain model lives, and keeping them in just inflates every
-number that follows. On that real repo, 1,022 files dropped to 730 once tests and docs got filtered
-out. The line count dropped from 72,594 to 27,181. Under half. That one filtering step is most of
-what makes the rest of this affordable.
+number that follows. Filtering out tests alone typically removes a large share of a repo's tracked
+lines, test code is often as large as or larger than the code it tests, so this one step is usually
+most of what makes the rest of the pass affordable. The report states the real before-and-after
+counts for your repo, computed on that run, not carried over from anywhere else.
 
 **2. Triage.** A handful of `grep` searches. No AI involved yet. It runs across every file in scope
 and catches the part of the rule set that's just a pattern: a suppressed type checker, a bare `any`,
