@@ -9,9 +9,12 @@ description: >
   table. full/deep modes never re-scan the repository, they spend independent review only on
   confirming what lite flagged as ambiguous, then fix. Produces a detailed compliance report, then
   asks the user whether to launch a fixing pass. Negotiates precedence against the project's own
-  AGENTS.md/CLAUDE.md instead of assuming it. Use when the user wants a codebase audited, reviewed
-  for compliance, checked for over-engineering, or asks "how compliant is this repo" / "audit this
-  codebase" / "what's not following our standards."
+  AGENTS.md/CLAUDE.md instead of assuming it. Checkpoints the goal, chunk agenda, and per-chunk
+  completion to disk as each chunk finishes, so an audit interrupted by a context limit or
+  disconnection resumes at the next unfinished chunk instead of re-scanning from the start. Use when
+  the user wants a codebase audited, reviewed for compliance, checked for over-engineering, wants to
+  resume an interrupted audit, or asks "how compliant is this repo" / "audit this codebase" /
+  "what's not following our standards."
 argument-hint: "[lite|full|deep]"
 ---
 
@@ -84,6 +87,47 @@ Working state lives in your session scratchpad, under `better-coding-review/`: `
 master table, updated in place as confirmation resolves rows, never rewritten from scratch) and,
 only if the user approves fixing, `charter.md` and `ledger.md` in the same location `better-coding`
 would use. Never in the repository.
+
+## Progress checkpoints, for resuming after a stop
+
+Same problem as `better-coding`: a session can stop mid-audit, from a context limit, an
+interruption, anything, and the next invocation remembers nothing but what's on disk. `report.md`
+already accumulates in place rather than getting rewritten each phase, so most of the resumability
+work is already there by design. What's missing is the goal and agenda stated upfront, and
+completion tracked per chunk, not just per phase.
+
+At the very top of `report.md`, written in Phase 0 before triage runs, before any real work begins:
+
+```markdown
+# Progress — better-coding-review
+
+## Goal
+Audit <repo path> for compliance. Mode: <lite | full | deep>. Precedence: <mode>.
+
+## Agenda
+<filled in once Phase 1 computes it: total files -> important files -> lines -> chunk count, then
+the full chunk list by id, each one starting Not started>
+
+## Status: NOT STARTED | IN PROGRESS | BLOCKED | DONE
+Last updated: <phase, chunk, timestamp>
+```
+
+Then, as work actually happens: mark each chunk `Done` in the Agenda's chunk list the moment its
+Warden, or the `lite` pass itself, returns a verdict, not at the end of the whole wave. A wave of 8
+spawned chunks where 3 have already reported back is 3 real checkpoints, not zero, update the file
+as each one lands rather than batching the update until the wave finishes. Phase 4's confirmation
+batches get the same treatment once that phase starts.
+
+**On starting Phase 0**, before running triage: check for an existing `report.md` with `Status`
+other than `DONE`. If found, confirm in one line that the goal still matches, same repo, same mode,
+before resuming, a mismatch means a different task, not a resume, start fresh in that case rather
+than silently overwrite it. When it matches, resume at the first chunk still marked `Not started`
+rather than re-running triage and the `lite` pass against chunks already marked `Done`, those
+results don't need to be earned twice. If no file exists, or `Status` is already `DONE`, start fresh
+normally.
+
+Mark `Status: DONE` once Phase 5's report is actually compiled and, if a fixing pass ran, once
+Phase 7 finishes, the same finish line the loop already has.
 
 ---
 

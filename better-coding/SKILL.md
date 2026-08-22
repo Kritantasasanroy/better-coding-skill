@@ -8,8 +8,11 @@ description: >
   with zero open violations. Scales to any codebase size via triage-first, chunked audits, and a
   lite/full/deep mode so cost matches how much independent verification you actually need mid-loop,
   never at the final gate. Negotiates precedence against the project's own AGENTS.md/CLAUDE.md
-  instead of assuming it. Use for any feature, fix, or refactor where quality matters. Pairs with
-  better-coding-review, which audits a whole existing codebase and can hand fixes to this loop.
+  instead of assuming it. Checkpoints the goal, agenda, and current position to disk after every
+  phase, so a session that stops from a context limit or interruption resumes from exactly where it
+  left off instead of restarting. Use for any feature, fix, or refactor where quality matters, or to
+  resume an interrupted one. Pairs with better-coding-review, which audits a whole existing codebase
+  and can hand fixes to this loop.
 argument-hint: "[lite|full|deep]"
 ---
 
@@ -91,9 +94,72 @@ starts the negotiation fresh.
 
 ## State
 
-Loop state lives in your session scratchpad, under `better-coding/`: `charter.md` and `ledger.md`.
-Never in the repository. Writing loop bookkeeping into the user's project is itself a scope
-violation (L13).
+Loop state lives in your session scratchpad, under `better-coding/`: `charter.md`, `ledger.md`, and
+`progress.md`. Never in the repository. Writing loop bookkeeping into the user's project is itself a
+scope violation (L13).
+
+## Progress checkpoints, for resuming after a stop
+
+A session can end mid-task: the agent stops, the context runs out, the connection drops. When that
+happens, the next invocation remembers none of this conversation, only what's actually on disk.
+`progress.md` exists so that next invocation picks up exactly where this one left off instead of
+starting the whole loop over.
+
+Write it immediately, before any real work begins, as the first thing Phase 0 does, with the full
+goal and the full agenda already in it:
+
+```markdown
+# Progress — better-coding
+
+## Goal
+<one sentence, verbatim>
+
+## Agenda
+<the planned slice breakdown: the first slice for certain, later ones as "to be determined once
+prior slices land" if the full breakdown isn't known yet, filled in as Phase 2 identifies them>
+
+## Mode / Precedence
+<settings, once resolved>
+
+## Status: NOT STARTED | IN PROGRESS | BLOCKED | DONE
+Last updated: <phase, slice, timestamp>
+
+## Completed
+- [x] Recon
+- [x] Domain model + design
+- [x] Slice 1: <one line> — committed <sha>
+
+## In progress right now
+<the exact phase and slice, specific enough that reading only this one line says what to do next,
+e.g. "Slice 3: Phase 4 audit, Warden spawned, awaiting verdict">
+
+## Remaining
+- [ ] Slice 3: <one line>
+- [ ] Slice 4: <one line, if already known>
+```
+
+The goal and agenda have to be complete even in round one, before anything else gets written, a
+resume with a missing or vague goal can't finish the job correctly no matter how good its record of
+what already happened is.
+
+After that, update it at every phase transition, not on a timer: after Recon, after Design, after
+each slice is built, after each audit verdict, after each sentencing decision, after each
+remediation, after each verify, after each gate check. A phase transition is the checkpoint unit,
+not a clock. If a single phase is running long, for instance reading a lot of surrounding code
+during Recon, that's exactly when an extra mid-phase update earns its cost, don't wait for the
+phase to finish if it's taking a while.
+
+**On starting Phase 0**, before writing a new charter: check whether `progress.md` already exists
+with `Status` other than `DONE`. If it does, read it, cross-check its `Completed` slices against
+real git history (`git log`, the commits it claims actually exist), and confirm in one line with the
+user that this is the same goal before resuming, a goal that doesn't match what's being asked now is
+a different task, not a resume, in that case start fresh and don't overwrite the old file until the
+new charter is actually written. When it does match, resume at exactly the phase and slice named
+under `In progress right now`, not from Phase 0 again. If no file exists, or `Status` is already
+`DONE`, start fresh normally.
+
+Mark `Status: DONE` only once Phase 8's gate actually passes and the ledger is reported per L19,
+the same finish line the loop already has, this file just makes the path there resumable.
 
 ---
 
