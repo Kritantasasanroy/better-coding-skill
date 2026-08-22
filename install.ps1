@@ -95,6 +95,21 @@ if ($Project) {
     Copy-Item -Path (Join-Path $extractedRoot '.kiro\steering\better-coding.md') -Destination (Join-Path $kiroDir 'better-coding.md') -Force
     Write-Host '  - .kiro\steering\better-coding.md' -ForegroundColor Green
 
+    $cursorDir = Join-Path $projectDir '.cursor\rules'
+    New-Item -ItemType Directory -Force -Path $cursorDir | Out-Null
+    Copy-Item -Path (Join-Path $extractedRoot '.cursor\rules\better-coding.mdc') -Destination (Join-Path $cursorDir 'better-coding.mdc') -Force
+    Write-Host '  - .cursor\rules\better-coding.mdc' -ForegroundColor Green
+
+    $windsurfDir = Join-Path $projectDir '.windsurf\rules'
+    New-Item -ItemType Directory -Force -Path $windsurfDir | Out-Null
+    Copy-Item -Path (Join-Path $extractedRoot '.windsurf\rules\better-coding.md') -Destination (Join-Path $windsurfDir 'better-coding.md') -Force
+    Write-Host '  - .windsurf\rules\better-coding.md' -ForegroundColor Green
+
+    $clineDir = Join-Path $projectDir '.clinerules'
+    New-Item -ItemType Directory -Force -Path $clineDir | Out-Null
+    Copy-Item -Path (Join-Path $extractedRoot '.clinerules\better-coding.md') -Destination (Join-Path $clineDir 'better-coding.md') -Force
+    Write-Host '  - .clinerules\better-coding.md' -ForegroundColor Green
+
     Write-Host "`nCommit these into the repo if you want your team to get them too." -ForegroundColor Cyan
 } elseif (-not $SkipClaude) {
     Write-Host "`nThis installed Claude Code only. AGENTS.md/Devin/Kiro files are per-project, not" -ForegroundColor Yellow

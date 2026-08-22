@@ -184,20 +184,67 @@ L25, L26, L28, L31, and anything triage flagged as a lead) as rigorously as you 
 checked and what you concluded, and label the result **SELF-CHECKED**, not CLEAN. Proceed to
 Phase 5 treating any self-identified issue as a finding against yourself.
 
-**`full` / `deep`**: spawn the Warden. This is blocking, the next step depends entirely on the
-verdict.
+**`full`**: one Warden for the whole build session, not one per slice. Slices in this loop are
+never parallel, you can't start slice 2 until slice 1 is audited and fixed, so there's no
+concurrency to lose by keeping a single Warden alive instead of spawning fresh each round. What that
+buys back is real: the rules only get read once for the entire feature instead of once per slice,
+which is most of the fixed cost a fresh spawn pays every single time. On the **first** Phase 4 of
+the session:
 
 ```
 Agent(
   subagent_type: "general-purpose",
-  model: <"haiku" in full mode; omit (inherit default) in deep mode>,
+  model: "haiku",
+  run_in_background: false,
+  description: "Warden (session)",
+  prompt: <the brief below, with "Audit mode: diff, round 1 of a persistent session." and an
+           instruction to hold the rules and Standing Orders in mind for every future message
+           on this thread, not just this round>
+)
+```
+
+Remember the agent's name or ID from that spawn. On **every subsequent** Phase 4 in this session,
+don't spawn again, continue the same agent:
+
+```
+SendMessage(
+  to: <the Warden's name from the first spawn>,
+  message: <this round's brief, same shape as below, minus the rule-set Read instructions,
+            it already has them>
+)
+```
+
+Wait for the reply before moving to Phase 5, same as a fresh spawn, this is still blocking. If
+continuation ever behaves unexpectedly, misses context, or you're not confident it actually carried
+the prior rounds forward, fall back to a fresh spawn for that round rather than trust a doubtful
+verdict, a wasted spawn costs tokens, an unreliable verdict costs correctness, and correctness wins
+that trade every time. Retire the session Warden and start a fresh one if a build session runs long,
+past roughly 10 slices, so its own context doesn't grow unbounded, the ledger's Standing Orders
+travel with it into the new one regardless, since those live in `ledger.md`, not in the Warden's own
+memory.
+
+**`deep`**: a fresh spawn every slice, deliberately no persistence. This is the tier with no
+shortcuts, and continuation, useful as it is for cost, is still a shortcut: a Warden that remembers
+agreeing to something earlier in the same thread is a Warden slightly more likely to agree to
+something similar again, see `warden.md`'s standing position on this. `deep` mode trades that
+efficiency away on purpose.
+
+```
+Agent(
+  subagent_type: "general-purpose",
   run_in_background: false,
   description: "Warden audit",
   prompt: <the brief below>
 )
 ```
 
-Pass **absolute** paths. The Warden is a fresh agent with no conversation context, so its `Read`
+**Phase 8's gate audit, regardless of the session's mode**: always a fresh spawn, always full
+rigor, never a continuation of the session Warden even if one exists. This is both the honest final
+check and the backstop against the exact risk `deep` mode avoids by never persisting in the first
+place, a Warden that's been agreeing with you all session is the wrong one to trust for the verdict
+that decides whether the work is actually done.
+
+Pass **absolute** paths on every spawn. A fresh Warden has no conversation context, so its `Read`
 cannot expand `~` or resolve anything relative to this file. Resolve this skill's own directory to a
 concrete absolute path first: it's wherever this SKILL.md actually loaded from, whether that's a
 user-level install (`~/.claude/skills/better-coding/`, e.g.
@@ -207,13 +254,13 @@ repo (`<repo-root>/.claude/skills/better-coding/`). If it isn't already obvious,
 
 The brief must contain, and nothing else that colors the judgment:
 
-- **`full` mode:** `Read <skill-dir>/references/cheatsheet.md and follow it exactly, that's the
-  rule set and the standing position for this round.` This is the condensed rulebook, one line per
-  rule instead of the full rationale and examples, it's what keeps a routine per-slice audit cheap.
-  **`deep` mode**, and **Phase 8's gate audit regardless of the session's mode**: `Read
-  <skill-dir>/references/warden.md and follow it exactly. Read <skill-dir>/references/law.md,
-  that's the rule set.`, the full files, no compression, this is the check that has to be
-  trustworthy on its own.
+- **`full` mode, first spawn only:** `Read <skill-dir>/references/cheatsheet.md and follow it
+  exactly, that's the rule set and the standing position for this session.` The condensed rulebook,
+  one line per rule instead of the full rationale, read once and carried forward by the same agent
+  for every round after this one. **`deep` mode**, and **Phase 8's gate audit regardless of the
+  session's mode**: `Read <skill-dir>/references/warden.md and follow it exactly. Read
+  <skill-dir>/references/law.md, that's the rule set.`, the full files, no compression, every time,
+  this is the tier and the check that have to be trustworthy on their own.
 - `Audit mode: diff.`
 - The repo path, the baseline ref, and the changed files.
 - Triage's leads for this slice (file:line, which pattern), so the Warden verifies and expands
@@ -222,7 +269,9 @@ The brief must contain, and nothing else that colors the judgment:
   confirms the fix rather than trusting your own report of it.
 - The negotiated precedence mode, and the project's instruction files to read under it.
 - The charter's goal, acceptance criteria, and this slice's domain model (from Phase 2).
-- The Standing Orders (repeat-offense rules), if there are any yet.
+- The Standing Orders (repeat-offense rules), if there are any yet, every round, even to a
+  continued session Warden, a rule promoted to Standing Orders mid-session needs to reach it just as
+  reliably as a fresh spawn would get it.
 
 Never include your own justification for a choice, a summary of what the code "does," or any hint of
 what verdict you're expecting. The Warden reads the code. That's all it gets.
