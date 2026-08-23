@@ -94,9 +94,31 @@ starts the negotiation fresh.
 
 ## State
 
-Loop state lives in your session scratchpad, under `better-coding/`: `charter.md`, `ledger.md`, and
-`progress.md`. Never in the repository. Writing loop bookkeeping into the user's project is itself a
-scope violation (L13).
+Loop state lives outside the repository (L13, writing loop bookkeeping into the user's project is a
+scope violation), but it does **not** live in the session scratchpad. A session scratchpad is
+scoped to the session that created it, a new terminal, a relaunch after a crash, a fresh `claude`
+process all get a different one, so anything written there becomes unreachable the moment the
+session that wrote it ends. That's exactly the case resumability has to survive.
+
+Instead, state lives at a fixed, repo-keyed location under the user's home directory, the same on
+every session, every terminal, every day, for as long as the repo stays at the same path:
+
+```
+~/.claude/better-coding/state/<repo-slug>/charter.md
+~/.claude/better-coding/state/<repo-slug>/ledger.md
+~/.claude/better-coding/state/<repo-slug>/progress.md
+```
+
+`<repo-slug>` is the repository's absolute path, lowercased, with every character that isn't a
+letter, digit, or dash turned into a dash, repeated dashes collapsed to one: `git rev-parse
+--show-toplevel` (or the current working directory if that fails) piped through something like
+`tr 'A-Z' 'a-z' | sed 's/[^a-z0-9]/-/g; s/-\+/-/g'`. Compute it once, at the very start of Phase 0,
+before checking for existing state, and reuse the same value for the rest of the session, it's what
+lets a different repo's in-progress work coexist without collision and lets the *same* repo's work
+be found again from any future session.
+
+Precedence, per the section above, stays session-only on purpose, deliberately, it was decided that
+way, don't move it here.
 
 ## Progress checkpoints, for resuming after a stop
 

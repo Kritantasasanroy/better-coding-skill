@@ -83,10 +83,22 @@ choice.
 
 ## State
 
-Working state lives in your session scratchpad, under `better-coding-review/`: `report.md` (the
-master table, updated in place as confirmation resolves rows, never rewritten from scratch) and,
-only if the user approves fixing, `charter.md` and `ledger.md` in the same location `better-coding`
-would use. Never in the repository.
+Working state lives outside the repository, but **not** in the session scratchpad, a scratchpad is
+scoped to the session that created it, so anything written there is unreachable the moment that
+session ends, a new terminal or a relaunch after a crash gets a different one. That's exactly the
+case an audit spanning a large repository is most likely to hit.
+
+Instead, per `better-coding`'s State section, state lives at a fixed, repo-keyed location under the
+user's home directory, computed the same way, once, at the start of Phase 0:
+
+```
+~/.claude/better-coding/state/<repo-slug>/report.md
+```
+
+the master table, updated in place as confirmation resolves rows, never rewritten from scratch, and,
+only if the user approves fixing, `charter.md` and `ledger.md` in that same directory, exactly where
+`better-coding` itself would look for them, since the fixing pass in Phase 7 *is* `better-coding`'s
+own loop.
 
 ## Progress checkpoints, for resuming after a stop
 

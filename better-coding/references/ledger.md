@@ -3,8 +3,9 @@
 The ledger is the loop's memory. Without it, the same mistake made in round four is the same mistake
 made in round one, and "penalty" means nothing.
 
-It lives at `<scratchpad>/better-coding/ledger.md`. Never in the repository, and never persisted
-anywhere outside the current session, per the precedence and state rules in `SKILL.md`.
+It lives at `~/.claude/better-coding/state/<repo-slug>/ledger.md`, per `SKILL.md`'s State section.
+Never in the repository, and deliberately persisted past the current session, that's what lets a
+Standing Order survive a stop and a resume, not just a stop and a restart of the same round.
 
 This file governs the build loop's penalty mechanics, used directly by `better-coding`, and reused
 by `better-coding-review` once the user approves fixing what its audit found. The audit-only report
