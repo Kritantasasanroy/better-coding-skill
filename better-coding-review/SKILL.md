@@ -14,7 +14,8 @@ description: >
   disconnection resumes at the next unfinished chunk instead of re-scanning from the start. Use when
   the user wants a codebase audited, reviewed for compliance, checked for over-engineering, wants to
   resume an interrupted audit, or asks "how compliant is this repo" / "audit this codebase" /
-  "what's not following our standards."
+  "what's not following our standards." A missing-domain-model finding (L25) routes, on approval, to
+  domain-modelling before better-coding's own fixing loop touches the implementation.
 argument-hint: "[lite|full|deep]"
 ---
 
@@ -37,9 +38,13 @@ Read the shared rule set from the paired skill when the phase that needs it begi
   reads instead of the full files.
 - `../better-coding/references/warden.md`: the auditor's brief, handed to the Warden verbatim.
 - `../better-coding/references/ledger.md`: used only in the fixing pass, never in the audit itself.
+- `../domain-modelling/SKILL.md`: the interactive session L25 findings route to during the fixing
+  pass (Phase 7), never during the audit itself.
 
 If `better-coding` isn't installed alongside this skill, stop and tell the user, this skill depends
-on it for the rule set, the triage patterns, and the fixing loop.
+on it for the rule set, the triage patterns, and the fixing loop. `domain-modelling` isn't required
+to audit or report, only to fix an L25 finding properly; if it isn't installed, say so when Phase 7
+reaches such a finding rather than silently falling back to a lighter self-authored model.
 
 ## The roles
 
@@ -288,7 +293,12 @@ say so plainly rather than letting silence imply otherwise.
 
 ## Domain modeling gaps
 <modules or features with no identifiable domain model; classes named FooManager/FooHelper/FooUtils/
-FooProcessor/FooGenerator (L26) and what real concept each is likely standing in for>
+FooProcessor/FooGenerator/FooHandler/FooBuilder/FooEngine/FooCoordinator/FooData/FooInfo, or a class
+named for a verb (ProcessPayment), and what real concept each is likely standing in for; a concept
+never marked general/ours/plumbing, especially a business rule sitting in application/common because
+generalizing it was tempting; layering that's a flat list of peers instead of "every child names its
+parent"; an entity with no decided CRUD semantics — immutability, what delete means, whether it
+should be append-only>
 
 ## Unverified
 <anything neither pass could resolve, and what would be needed to>
@@ -315,8 +325,12 @@ code:
 
 - Group findings into slices the same way `better-coding` Phase 2 would, one coherent change per
   slice, a CAPITAL finding and the file it's in is usually its own slice.
-- Where a finding is really a missing domain model (L25) rather than a code defect, write the model
-  first, per `better-coding` Phase 2, before touching the implementation it should have guided.
+- Where a finding is really a missing domain model (L25) rather than a code defect, that slice starts
+  with `domain-modelling`, run against the existing code and behavior this repository already has,
+  not a from-scratch feature interview — its Phase 3 ("read the repo, and be willing to change it")
+  is exactly built for auditing what exists before remodeling it. Only once it produces a design (or
+  the engineer explicitly opts for a same-session self-authored model, for a gap too small to justify
+  the full session) does `better-coding` Phase 3 touch the implementation.
 - Run `better-coding` Phase 3 through 8 for each slice: triage, build the fix, audit in diff mode
   this time (not whole-repository mode, you're now working a specific change against a specific
   baseline), sentence, remediate, verify, gate.

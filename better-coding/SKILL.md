@@ -12,7 +12,8 @@ description: >
   phase, so a session that stops from a context limit or interruption resumes from exactly where it
   left off instead of restarting. Use for any feature, fix, or refactor where quality matters, or to
   resume an interrupted one. Pairs with better-coding-review, which audits a whole existing codebase
-  and can hand fixes to this loop.
+  and can hand fixes to this loop, and with domain-modelling, which this loop's Phase 2 runs for any
+  non-trivial feature to produce the domain model before code gets written.
 argument-hint: "[lite|full|deep]"
 ---
 
@@ -35,6 +36,13 @@ Four files carry the detail. Read each one when the phase that needs it begins, 
   runs before any agent gets spawned.
 - [references/warden.md](references/warden.md): the auditor's brief, handed to the Warden verbatim.
 - [references/ledger.md](references/ledger.md): the penalty schedule and the ledger format.
+
+A fifth skill, `domain-modelling`, is the canonical way Phase 2 below gets satisfied for anything
+non-trivial: a full interactive session (interview, silent build, walkthrough) that ends in a design
+document and, if the engineer wants it, a PR putting the model in front of the team before any
+implementation starts. It is not optional polish, it is what "strictly follow the domain model before
+writing code" means in practice, and its rules are folded into L25/L26/L27/L8/L29 below so the same
+standard applies even when a full session wasn't run for this particular change.
 
 ## The two roles
 
@@ -143,6 +151,9 @@ prior slices land" if the full breakdown isn't known yet, filled in as Phase 2 i
 ## Mode / Precedence
 <settings, once resolved>
 
+## Domain model
+Path A (domain-modelling) | Path B (self-authored) — <path to the design doc, or "inline below">
+
 ## Status: NOT STARTED | IN PROGRESS | BLOCKED | DONE
 Last updated: <phase, slice, timestamp>
 
@@ -215,8 +226,20 @@ say so to the user. Don't quietly narrow them just to make the loop terminate.
 
 ## Phase 2: Domain model, then design
 
-For any non-trivial feature, L25 is not optional: before any class or function gets written, write
-down, in plain text:
+L25 is not optional for any non-trivial feature, and it's satisfied properly, not with a paragraph
+guessed at speed. Two paths, chosen once, at the start of this phase:
+
+**Path A — run `domain-modelling` (the default for anything non-trivial).** Invoke the
+`domain-modelling` skill directly, in this same session, before writing a line of code. Let its
+interview, silent build, and walkthrough run to completion; its output (a design document, normally
+at `docs/designs/<feature>.md`, occasionally an existing GitHub issue or plan file it was pointed at
+instead) *is* this phase's deliverable. Record that document's path in the charter next to the goal.
+If the engineer wants the design raised as its own PR first (`domain-modelling`'s Phase 12), let that
+land before returning here to cut Phase 3's slices; that PR is documentation, not the feature, and
+doesn't itself go through this loop's ledger.
+
+**Path B — a same-session self-authored model, only for work too small to justify the full
+session** (a narrow bug fix, a one-file change with no new concept). Write down, in plain text:
 
 - What are the important domain objects?
 - What properties and behavior belong to each?
@@ -225,17 +248,31 @@ down, in plain text:
 - What rules or invariants must always hold?
 - What should the API resources look like, given this model?
 
-This isn't a design document, a few lines per object is enough. Save it beside the charter; the
-Warden checks the implementation against it, in every mode including `lite`'s self-check. If a name
-like `FooManager` or `FooProcessor` shows up while doing this, stop and ask what real thing it's
-standing in for (L26), the answer usually replaces the manager with the thing itself.
+A few lines per object is enough here, but it still has to survive L25's generalized checks, not just
+list nouns: is each one a durable noun rather than the feature's own question in a costume; is it
+marked general, ours, or plumbing, and does that placement actually hold (a business rule doesn't
+belong in `application/common` just because generalizing it was tempting); does the layering hold (every
+child names its parent, no duplicated identity fields); is CRUD decided per entity, not left implicit;
+and did a cut pass actually run over what got written. If a name like `FooManager`, `FooHandler`, or
+`FooBuilder` shows up while doing this, stop and ask what real thing it's standing in for (L26), the
+answer usually replaces it with the thing itself. If in doubt about which path this feature needs,
+default to Path A, a session that turns out to be short is cheap; a feature modeled by a guessed
+paragraph that turns out to need real thought is not.
 
-Only once the model is written: name the entities involved, the state each owns, and the behavior
-that belongs to each (L16). Say where the logic lives and why that's the right home for it. If your
-plan reads like a long function or a pipeline of transforms, the plan is wrong (L27), go find the
-entity it actually belongs to. Prefer polymorphism over branching on a type tag (L28).
+Save the result beside the charter either way; the Warden checks the implementation against it, in
+every mode including `lite`'s self-check.
 
-Then cut the work into slices. One slice is one coherent change (L18).
+Only once the model exists: name the entities involved, the state each owns, and the behavior that
+belongs to each (L16). Say where the logic lives and why that's the right home for it — on the
+concept itself by default, on a reader/writer when the decision spans concepts, never bolted onto a
+domain object as orchestration it doesn't own (L27). If your plan reads like a long function, a
+pipeline of transforms, or a class named for what it does rather than what it is, the plan is wrong
+(L27), go find the entity it actually belongs to. Prefer polymorphism over branching on a type tag
+(L28).
+
+Then cut the work into slices. One slice is one coherent change (L18). If Path A produced an
+implementation plan with its own step order, that order **is** the slice breakdown, don't re-derive
+one.
 
 ## Phase 3: Build one slice
 
@@ -452,4 +489,6 @@ For work headed toward a pull request, hand off to the repo's own `pr-convention
 `pr-review-loop` skills, if they exist. This skill governs how the code gets written. Those govern
 how it ships. For an existing codebase that was never built under this loop, use
 `better-coding-review` first, it produces the report this skill's Phase 0 through 2 would otherwise
-have no way to generate for code nobody here wrote.
+have no way to generate for code nobody here wrote. For the domain model specifically, `domain-
+modelling` governs how it gets decided, before Phase 2 ever writes a class; this loop governs
+everything from there on.

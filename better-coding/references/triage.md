@@ -99,7 +99,13 @@ hit alone:**
 rg -n 'Optional\[|:\s*\w+\s*\|\s*None|\?\s*:' -- '*.py' '*.ts' '*.tsx'
 
 # generic-suffix names, L26
-rg -n 'class \w*(Manager|Helper|Utils|Processor|Generator)\b' -- '*.py' '*.ts' '*.tsx'
+rg -n 'class \w*(Manager|Helper|Utils|Processor|Generator|Handler|Builder|Engine|Coordinator|Data|Info)\b' -- '*.py' '*.ts' '*.tsx'
+
+# adjective-as-state naming, L26 (a state bolted onto the noun as a prefix instead of a field/enum)
+rg -n 'class (Connected|Active|Verified|Paid|Cancelled|Expired|Enabled|Disabled)\w*[:(\[]' -- '*.py' '*.ts' '*.tsx'
+
+# verb-named classes, L27 (a class name is a verb rather than the noun it acts on)
+rg -n 'class (Process|Generate|Validate|Check|Handle|Fetch|Parse)\w*[:(\[]' -- '*.py' '*.ts' '*.tsx'
 
 # module-level function or constant outside a class, L27 (Python: unindented def is reliable)
 rg -n '^def \w+' -- '*.py'

@@ -75,11 +75,94 @@ their relationships and rules, explicitly, rather than spreading strings, boolea
 through the codebase. This model is written once per feature, lives with the charter, and the Warden
 checks the implementation against it.
 
+The [domain-modelling skill](../../domain-modelling/SKILL.md) is the canonical, interactive way to
+produce this model for any feature substantial enough to warrant an actual session rather than a
+paragraph: run it before Phase 2 of `better-coding`'s loop, or before starting a `better-coding-review`
+fixing-pass slice that a finding below reveals is really a missing model. Its output (a design
+document, usually at `docs/designs/<feature>.md`) satisfies this rule directly and is what the Warden
+checks the implementation against. For work too small to justify that session, or when auditing code
+nobody modeled going in, the checks below are what the Warden and the Builder's own self-check apply
+instead, generalized from that same skill so the standard doesn't drop just because the full session
+didn't run:
+
+- **The durable-noun test.** A feature usually arrives phrased as a question — "warn them if the repo
+  is still cloning," "check whether these credentials can write" — and the question is never the
+  concept. List the nouns that exist whether or not this feature ships (an invoice, a subscription, a
+  repository, a connection) before modeling the question itself, and check each candidate concept two
+  ways: does it survive the feature being cancelled, and is it a noun or a question wearing a noun
+  costume (`PaymentEligibility`, `InvoiceValidationResult`, `AccessFinding` are questions). Model the
+  invoice first and the warning falls out as a state on it; model the warning first and the invoice
+  never shows up.
+- **Definition before name.** Every concept gets a one-sentence definition — what it is, independent
+  of how this codebase happens to build it — written before any class name is chosen, and the name is
+  then tested against that sentence, not against the code. If defending a name means describing how
+  the system works ("well, we connect and then read the grant tables, so..."), the name describes a
+  code path, not a concept.
+- **General, ours, or plumbing, and each lives somewhere different.** Mark every concept: **general**
+  (any product doing this kind of work has it, and it means the same thing everywhere — `Invoice`,
+  `Money`, `Subscription`), **ours** (how this specific business does it — our plan tiers, our dunning
+  sequence), or **plumbing** (no business meaning — encryption, JWTs, config, retries). General does
+  **not** mean shared infrastructure: a generic `Invoice` is still billing and lives in
+  `modules/billing/types.py` underneath the specific rules, not in `application/common`. Depth inside
+  the module, not a move out of it. Only plumbing leaves the module, as a **helper**
+  (`EncryptionHelper`, never `CryptoService`); the business-specific layer is exposed as a **service**.
+  A business rule quietly buried in `application/common` because it was tempting to generalize is a
+  finding under this rule as much as a missing model is.
+- **Layering, not a flat list of peers.** A base concept owns identity; things that belong to it hang
+  off it; states and enums sit at the bottom. Two checks: every child should be describable as "the X
+  of a Y" (if Y isn't in the model, add it, no further than the thing the user actually acts on — the
+  word they'd use, not a part of it only an implementer would name); and two types that both carry the
+  same identifying fields are the signature of a missing base concept, not a coincidence.
+- **The transaction unit.** For a cluster of concepts, ask whether a real invariant (not just
+  relatedness) would be broken if they were saved separately. If yes, they're one unit with one entity
+  as the way in; other units are referenced by id, never by held object, and one operation changes one
+  unit. This is why `ApplicationRepository[Entity, Query]` takes exactly one entity type — if a
+  proposed model doesn't map onto one repository, either the unit is wrong or the module boundary is.
+- **CRUD is a modeling question, decided before any route exists.** For every entity: what's a valid
+  create, and what precondition must hold first; which fields are immutable after creation (most
+  engineers default everything to mutable — an `account_id`, an `amount`, a `created_at` usually
+  aren't); whether "update" is actually a named state transition (`cancel()`, `renew()`) rather than a
+  generic field patch; what delete actually means here (really gone / a terminal status the row keeps,
+  for anything financial, audited, or referenced elsewhere / not deletable at all — choosing hard
+  delete for something another entity points at is a data-integrity bug agreed to in advance); and
+  whether it's append-only (usage records, ledger entries, audit events: create-and-read, no update,
+  no delete, and no setter added later). A running total that gets mutated in place is usually this
+  same mistake: prefer an append-only record with the total derived.
+- **Write the full shape, then cut.** Every field gets a real type, every method a real signature —
+  the argument and return types are where modeling mistakes hide, and a method named without one is a
+  wish, not a design. Then go back over what got written and delete what isn't earning its place: a
+  wrapper around one primitive with no behavior and no invariant (a `str` in a costume); a type that's
+  another type plus two fields (split one concept in two, forcing every caller to hold both halves);
+  a type with one construction site and one read site (a promoted local variable). The test: delete
+  the type in your head and ask what breaks; "nothing, it'd just be a `str`" means delete it for real.
+  This pass runs in the direction opposite every other check here, all of which push toward adding
+  types, so it's an explicit, separate step, not a hope that restraint happens automatically.
+
 **L26: generic-suffix names are a signal, not a rule.** `FooManager`, `FooHelper`, `FooUtils`,
-`FooProcessor`, `FooGenerator`. These aren't automatically wrong, but they're often the tell that
-the underlying domain concept was never identified. Before accepting one, ask what real thing it's
-standing in for, and whether naming that thing directly would collapse the class into something
-smaller and more obvious.
+`FooProcessor`, `FooGenerator`, and the same failure under a different suffix: `FooHandler`,
+`FooBuilder`, `FooEngine`, `FooCoordinator`, `FooData`, `FooInfo`. These aren't automatically wrong,
+but they're often the tell that the underlying domain concept was never identified — a verb turned
+into a noun by suffix (`PaymentProcessor` is `ProcessPayment` wearing a hat). Before accepting one,
+ask what real thing it's standing in for, and whether naming that thing directly would collapse the
+class into something smaller and more obvious. The exception is genuine shared plumbing living in
+`application/common`, named `Helper` deliberately (L25's general/ours/plumbing split), not a business
+concept anywhere else in the codebase wearing the same suffix.
+
+Two more naming smells worth calling out by name, because they survive a correct entity list and
+still cause the damage:
+
+- **An adjective bolted onto a noun is a state, not a kind.** `ConnectedRepository`,
+  `ActiveSubscription`, `VerifiedAccount`, `PaidInvoice`. A repository doesn't become a different sort
+  of thing once it's connected; it's the same thing with a fact attached. Drop the adjective, put the
+  fact on the noun as a field, a status enum, or a method. Test: if the adjective can become false and
+  the thing survives, it's a state, not a kind, and the rare genuine subtype is the exception, not the
+  default assumption. This differs from a **qualifier**, which disambiguates a name that collides with
+  another meaning the team uses daily (`GitRepository` vs. the storage-layer `Repository`) — the test
+  is whether the qualifying word can ever become false for that object; "git" can't, "connected" can.
+- **A padding word hides a merge, not a second concept.** `Audit`, `Verdict`, `Record`, `Entry`,
+  `Detail`, `Item`, `Result`, `Finding`, `Info`, `State` are usually complete names wearing an extra
+  word. Strip it; if what's left is a name already used for something else in the model, this isn't a
+  second concept, it's the first one split in two, and the two should merge.
 
 **L27: no functional style, no free functions over domain data.** Objects are the default; a
 functional pipeline of transforms over anonymous structures is not a style choice here, it's not
@@ -92,7 +175,20 @@ used at all. Concretely:
 - No module-level `def` that belongs to a class, and no module-level variable, constant, or function
   that belongs to one either. The only acceptable module-level names are imports and type aliases.
 - Classes (and, on the frontend, components) are nouns. Functions, methods, and hooks are verbs.
-  `Subscription.renew()`, not `update_subscription_status(sub, "active")`.
+  `Subscription.renew()`, not `update_subscription_status(sub, "active")`. A class named with a verb
+  (`ProcessPayment`, `GenerateManifest`, `ValidateConnection`, `CheckAccess`) is this same failure at
+  its root, one step before the suffix family in L26: a class is a thing, a verb is something done to
+  a thing, and a verb-named class is always either a function that hasn't admitted it or a noun that
+  was never found. Find the noun (`Payment`, `Manifest`) and the verb becomes a method on it.
+- Not every piece of behavior has a home on the concept nearest to it, and forcing it there is its own
+  failure. Three homes, in order of preference: on the concept itself, when it needs only that
+  concept's own state (the default, and where most behavior belongs); on a reader or writer, when the
+  decision spans concepts or needs something fetched, but is still a business decision and stays in
+  the module (`SubscriptionWriter.cancel(...)`); or nowhere in the domain, when it's orchestration
+  rather than a decision — fetching, retrying, logging, transactions, calling a vendor — which belongs
+  to the caller, not to a domain object bolted with a method it doesn't own. The test isn't branch
+  count: a five-`if` method that only routes data is orchestration, and a one-line method deciding
+  whether a customer keeps access is domain logic.
 
 **L28: minimize branching; reach for it last, not first.** An `if`/`else` is not free. Before adding
 one, ask whether the real shape is polymorphism (a state's behavior lives on the type representing
@@ -121,7 +217,9 @@ Lazy, not negligent: trust-boundary validation, data-loss handling, security, an
 never on the chopping block to climb the ladder faster. When the Warden reports a laziness finding,
 it uses these tags: `delete` (dead code or a speculative feature), `stdlib` (reinvented standard
 library), `native` (a dependency doing what the platform already does), `yagni` (an abstraction with
-exactly one implementation), `shrink` (same logic, fewer lines).
+exactly one implementation), `shrink` (same logic, fewer lines), `cut` (L25's cut-pass over-typing: a
+wrapper around one primitive with no behavior and no invariant, a type that's another type plus two
+fields, or a type with one construction site and one read site — a promoted local variable).
 
 **L3: trace every branch.** Every `if`/`else`, loop, early return, and fallthrough is walked. An
 `if` with no reachable `else`, a guard against a state the type system already rules out, or a
@@ -172,7 +270,18 @@ actually broken. See also L26 for the specific generic-suffix case.
 **L8: model the domain, not the payload.** Data representing a real concept with meaningful
 properties becomes a type. Raw dicts, tuples, bare bytes, and loosely related primitives passed as a
 group are a missing entity. The converse also holds: a wrapper or metadata object that adds no
-domain structure is ceremony.
+domain structure is ceremony. Concrete smells that mean the same thing:
+
+- **Two or more booleans that can't all be true together** are one enum with an illegal-state
+  problem hiding in it. `is_active` + `is_trialing` + `is_cancelled` is `SubscriptionStatus`.
+- **A `str` whose values you know by heart** is an enum, no exception.
+- **An int whose unit you have to remember** is a value type (`TokenCount`, not `count: int`), the
+  same way a raw dict is a missing entity.
+- **Fields that always travel together** are a concept of their own: `period_start` + `period_end` is
+  a `BillingPeriod`; `amount` + `currency` is `Money`.
+- **A running total that gets written to** usually wants to be an append-only record with the total
+  derived instead. A mutated balance loses its own audit trail and races under concurrency; the fix is
+  rarely a lock, it's changing what gets persisted.
 
 **L31: no orphan classes.** Every class introduced while modeling the domain (L25) has to actually
 connect to that model: something calls it, something composes it, or it relates to another domain

@@ -68,7 +68,7 @@ if [ "$SKIP_CLAUDE" = false ]; then
   echo "Installing Claude Code skills to $SKILLS_DIR ..."
   mkdir -p "$SKILLS_DIR"
 
-  for skill in better-coding better-coding-review; do
+  for skill in better-coding better-coding-review domain-modelling; do
     dest="$SKILLS_DIR/$skill"
     rm -rf "$dest"
     cp -R "$EXTRACTED_ROOT/$skill" "$dest"
@@ -76,7 +76,7 @@ if [ "$SKIP_CLAUDE" = false ]; then
   done
 
   echo ""
-  echo "Done. Both skills are available in every project on this machine now."
+  echo "Done. All three skills are available in every project on this machine now."
   echo "Try: /better-coding-review lite   (from inside any repo, in Claude Code)"
 fi
 

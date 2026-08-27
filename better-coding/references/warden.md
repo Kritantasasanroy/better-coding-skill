@@ -78,19 +78,38 @@ The brief tells you which one you're running.
 Work the code actively, these are questions to answer, not boxes to tick.
 
 **Domain and architecture**
-- **The domain model (L25).** For a non-trivial feature, was a domain model written before the code?
-  Does the implementation actually match it, entities, states, relationships, or did the code drift
-  from the model (or was there never a model to check against)?
+- **The domain model (L25).** For a non-trivial feature, was a domain model written before the code,
+  ideally via the `domain-modelling` skill? Does the implementation actually match it, entities,
+  states, relationships, or did the code drift from the model (or was there never a model to check
+  against)? If there's no model to check against, apply L25's generalized checks directly: is the
+  concept a durable noun or the feature's question wearing a noun costume; is each concept marked
+  general, ours, or plumbing, and does a business rule sit in `application/common` because it was
+  tempting to generalize (a finding on its own); is the layering real (does every child name its
+  parent, and do two types share identity fields that belong on a base concept neither names); does
+  the cluster that changes together map onto exactly one repository, with siblings referenced by id;
+  for every entity, is CRUD actually decided (what's immutable after creation, whether "update" is
+  really a named state transition, what delete means, whether it should be append-only); and was a
+  cut pass actually run, or is there a wrapper around one primitive, a type that's another type plus
+  two fields, or a promoted local variable left in?
 - **Every new class, function, and name (L7, L9, L26).** Does the name describe everything it does
-  and nothing it doesn't? Is it a `*Manager`/`*Helper`/`*Utils`/`*Processor`/`*Generator` standing in
-  for a domain concept that was never named directly? Ask what real thing it represents.
+  and nothing it doesn't? Is it a `*Manager`/`*Helper`/`*Utils`/`*Processor`/`*Generator`/`*Handler`/
+  `*Builder`/`*Engine`/`*Coordinator`/`*Data`/`*Info` standing in for a domain concept that was never
+  named directly? Ask what real thing it represents. Separately: does the name carry an adjective
+  that can become false while the object survives (`ConnectedRepository` — that's a state, not a
+  kind, and belongs on the noun as a field or enum instead), and does stripping a padding word
+  (`Finding`, `Result`, `Record`, `Info`, `State`) reveal a name already used for something else in
+  the model (a collision, meaning two concepts should merge into one)?
 - **Every new class, again, for orphans (L31).** What does it relate to in the domain model, and
   what calls it? A class with no caller and no relationship to anything else is either dead code
   (L29 `delete`) or a fragment that belongs as a property or method on an existing type. If you
   can't state what it connects to, it's an orphan.
 - **Functional-style creep (L27).** Any module-level function that takes a type and derives
   something from it? Any transform pipeline over anonymous structures where a class should hold the
-  state and the behavior together? Any module-level variable or constant that belongs on a class?
+  state and the behavior together? Any module-level variable or constant that belongs on a class? Any
+  class named with a verb (`ProcessPayment`, `ValidateConnection`) rather than the noun it's actually
+  acting on? For behavior that doesn't sit on any single concept, is it at least a business decision
+  living on a reader/writer (acceptable) rather than orchestration bolted onto a domain object that
+  doesn't own it (not)?
 - **Every branch (L3, L28).** For each `if`/`else`/loop/early return: which inputs reach it? Name
   them. Separately: should this conditional exist at all, or is it a missing polymorphic dispatch?
   Flag both a branch that's unreachable and a branch that's reachable but the wrong shape.
@@ -104,7 +123,11 @@ Work the code actively, these are questions to answer, not boxes to tick.
   or translated without adding anything?
 - **Every new type (L8, L14).** Is a real domain concept being passed around as a dict or a tuple?
   Is `any`/`Any`/an untyped `dict` standing in anywhere a real shape is knowable? The latter is C1,
-  not a style note, treat it as such.
+  not a style note, treat it as such. Concretely: two or more booleans that can never all be true is
+  a missing enum; a `str` whose values are known by heart is a missing enum; an int whose unit has to
+  be remembered is a missing value type; fields that always travel together (`period_start` +
+  `period_end`) are a missing concept; and a balance or total that gets mutated in place is usually
+  meant to be derived from an append-only record instead.
 - **Every import (L1, L6).** Any import inside a function? Any reach into another module's internals
   rather than its public surface?
 - **Every layer (L15).** Is there a decision being made inside a view, controller, worker, job, CLI

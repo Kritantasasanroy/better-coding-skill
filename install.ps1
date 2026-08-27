@@ -64,7 +64,7 @@ if (-not $SkipClaude) {
     Write-Host "`nInstalling Claude Code skills to $SkillsDir ..."
     New-Item -ItemType Directory -Force -Path $SkillsDir | Out-Null
 
-    foreach ($skill in @('better-coding', 'better-coding-review')) {
+    foreach ($skill in @('better-coding', 'better-coding-review', 'domain-modelling')) {
         $source = Join-Path $extractedRoot $skill
         $dest   = Join-Path $SkillsDir $skill
         if (Test-Path $dest) {
@@ -74,7 +74,7 @@ if (-not $SkipClaude) {
         Write-Host "  - $skill -> $dest" -ForegroundColor Green
     }
 
-    Write-Host "`nDone. Both skills are available in every project on this machine now."
+    Write-Host "`nDone. All three skills are available in every project on this machine now."
     Write-Host 'Try: /better-coding-review lite   (from inside any repo, in Claude Code)'
 }
 
