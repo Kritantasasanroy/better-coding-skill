@@ -27,6 +27,7 @@ IMPER = {"add", "fix", "update", "remove", "change", "implement", "improve", "re
          "rename", "make", "convert", "replace", "correct", "delete", "create", "use", "avoid",
          "allow", "drop", "support", "handle", "simplify", "ensure", "teach", "document", "skip",
          "split", "bump", "revert", "set", "prevent", "return", "pass", "mark", "reduce", "switch"}
+MIN_PATH_COMMITS = 20
 ISSUE_STYLES = [("Fixed #N --", r"^Fixed #\d+ --"), ("Fixes #N", r"\b(?:Fixes|Closes|Resolves) #\d+"),
                 ("(#N) in subject", r"\(#\d+\)"), ("JIRA-style KEY-N", r"\b[A-Z][A-Z0-9]+-\d+\b"),
                 ("bpo-N / gh-N", r"\b(?:bpo|gh)-\d+"), ("URL to issue", r"https?://\S+/(?:issues|pull)/\d+")]
@@ -41,11 +42,19 @@ def pct(n, d):
     return f"{round(100.0 * n / d)}%" if d else "n/a"
 
 
-def commits(root, paths):
+def log_messages(root, paths):
     raw = git(root, "log", "--no-merges", "-400", "--format=%B%x1e", "--", *paths)
-    msgs = [m.strip("\n") for m in raw.split("\x1e") if m.strip()]
+    return [m.strip("\n") for m in raw.split("\x1e") if m.strip()]
+
+
+def commits(root, paths):
+    msgs = log_messages(root, paths)
+    scope = " touching these paths." if paths else "."
+    if paths and len(msgs) < MIN_PATH_COMMITS:
+        scope = f". Only {len(msgs)} touched these paths, so this is the whole repository's history."
+        msgs = log_messages(root, [])
     if not msgs:
-        return ["## Commits", "", "No history found for these paths."]
+        return ["## Commits", "", "No history found."]
     subj = [m.split("\n")[0] for m in msgs]
     n = len(msgs)
     lens = sorted(len(s) for s in subj)
@@ -72,7 +81,7 @@ def commits(root, paths):
                                                                   "Change-Id", "Bug", "Reviewed-on"))
     issue = [(label, sum(bool(re.search(rx, m, re.M)) for m in msgs)) for label, rx in ISSUE_STYLES]
     issue = [(l, c) for l, c in issue if c]
-    out = ["## Commits", "", f"Last {n} non-merge commits" + (" touching these paths." if paths else ".")]
+    out = ["## Commits", "", f"Last {n} non-merge commits{scope}"]
     out.append(f"- Subject length: median {statistics.median(lens)}, ≤50 in {pct(sum(x <= 50 for x in lens), n)}, "
                f"≤72 in {pct(sum(x <= 72 for x in lens), n)}")
     out.append(f"- Prefix: `area: ` {pct(sum(areas.values()), n)}, Conventional Commits {pct(conv, n)}"
