@@ -3,6 +3,8 @@
     python3 -I fingerprint.py <repo-root> [<path you will touch> ...]
 
 With paths, commits are read from the history of those paths and code from their directories.
+Relative paths resolve against the current directory, so run it from the repo or pass absolute
+paths. Fewer than 20 commits for the paths falls back to the whole repository's history.
 Without paths, the whole repository. Prints markdown, meant to be saved beside the charter and
 handed to the Reviewer and the Auditor so craft (H-rules) is judged against the house, not taste.
 """
