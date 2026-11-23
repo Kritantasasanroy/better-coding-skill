@@ -3,6 +3,13 @@
 Every rule has a stable ID. Findings cite the ID, so a rule broken twice is visible as the same
 rule. Severity drives the penalty, see [ledger.md](ledger.md).
 
+The Law has a companion, [craft.md](craft.md): the H-rules (`H1`…`H16`) that make code read as
+written by a maintainer of this repository, grounded in a study of pre-2020 production code and
+history ([research.md](research.md)). Both are enforced together, by the same agents, in the same
+ledger. Where a Law rule and the house's own convention collide on a matter of style (comment
+voice, commit format, error idiom), H1 lets the house win. Where they collide on substance (typing,
+swallowed errors, gutted tests, fabricated verification), the Law wins.
+
 ## Precedence is negotiated, not assumed
 
 This Law is a baseline, not an automatic override. The first time `better-coding` or
@@ -44,9 +51,15 @@ record, in its own change, with the reason.
 
 **C3: no swallowed errors.** `except X: pass`, an empty `catch {}`, a bare `except`, or catching an
 error and returning a default that hides it. The caller must be able to tell that something failed.
+One exception, taken from how pre-2020 production Python was written (see
+[research.md](research.md), F6): catching one *specific, expected* exception that represents a
+normal branch, such as `except KeyError:` when a missing key means "use the default", is control
+flow, not swallowing. It is acceptable when the absent case is the intended behavior and the
+exception type can't also signal a real failure from deeper in the call. `except Exception`,
+`except BaseException`, a bare `except`, and an empty `catch` never qualify.
 
 **C4: no fabricated verification.** Reporting that a command passed without running it, quoting
-output you didn't produce, or stating a Warden verdict that wasn't given. This is the one offense
+output you didn't produce, or stating a Reviewer or Auditor verdict that wasn't given. This is the one offense
 that makes every other guarantee worthless.
 
 **C5: no moving the goalposts.** Editing the charter's acceptance criteria to match what was built,
@@ -72,16 +85,16 @@ the first question is never "what generator class do I need." It's: what are the
 A file, a zip file, an app package, a manifest. If an account pays a subscription fee plus usage,
 model `Subscription`, `SubscriptionStatus`, `TokenUsage`, `TokenCreditBalance`, `AccountStatus`,
 their relationships and rules, explicitly, rather than spreading strings, booleans, and integers
-through the codebase. This model is written once per feature, lives with the charter, and the Warden
+through the codebase. This model is written once per feature, lives with the charter, and the Reviewer
 checks the implementation against it.
 
 The [domain-modelling skill](../../domain-modelling/SKILL.md) is the canonical, interactive way to
 produce this model for any feature substantial enough to warrant an actual session rather than a
 paragraph: run it before Phase 2 of `better-coding`'s loop, or before starting a `better-coding-review`
 fixing-pass slice that a finding below reveals is really a missing model. Its output (a design
-document, usually at `docs/designs/<feature>.md`) satisfies this rule directly and is what the Warden
+document, usually at `docs/designs/<feature>.md`) satisfies this rule directly and is what the Reviewer
 checks the implementation against. For work too small to justify that session, or when auditing code
-nobody modeled going in, the checks below are what the Warden and the Builder's own self-check apply
+nobody modeled going in, the checks below are what the Reviewer and the Writer's own self-check apply
 instead, generalized from that same skill so the standard doesn't drop just because the full session
 didn't run:
 
@@ -166,7 +179,17 @@ still cause the damage:
 
 **L27: no functional style, no free functions over domain data.** Objects are the default; a
 functional pipeline of transforms over anonymous structures is not a style choice here, it's not
-used at all. Concretely:
+used at all.
+
+Scope: this rule governs languages where the class is the unit of design (Python, TypeScript and
+JavaScript classes, Java, Kotlin, C#, Ruby, PHP). In C, Go and Rust the language idiom governs
+instead, per H1. There, functions over a struct (Go methods on a receiver, C functions taking the
+struct pointer first, Rust `impl` blocks) are the equivalent of "behavior beside its data", and
+that equivalence is what gets checked: a Go package of free functions passing anonymous maps
+around still fails this rule, a Go type with methods passes it. Git, Redis, PostgreSQL and the Go
+standard library are all written this way (see [research.md](research.md), F1, F4).
+
+Concretely:
 
 - Behavior lives beside the data it manipulates: on the service, the domain object, or the dataclass
   holding the fields.
@@ -214,7 +237,7 @@ the first rung that holds:
 The ladder runs *after* understanding the problem, not instead of it: read the code the change
 touches and trace the real flow before picking a rung. Lazy about the solution, never about reading.
 Lazy, not negligent: trust-boundary validation, data-loss handling, security, and accessibility are
-never on the chopping block to climb the ladder faster. When the Warden reports a laziness finding,
+never on the chopping block to climb the ladder faster. When the Reviewer or Auditor reports a laziness finding,
 it uses these tags: `delete` (dead code or a speculative feature), `stdlib` (reinvented standard
 library), `native` (a dependency doing what the platform already does), `yagni` (an abstraction with
 exactly one implementation), `shrink` (same logic, fewer lines), `cut` (L25's cut-pass over-typing: a
@@ -337,7 +360,8 @@ assumption, a non-obvious workflow. **Many projects ban comments outright; that 
 In such a project, a deliberately cut corner (the kind a `ponytail:` marker would normally flag) is
 never left as an inline comment either, since that's still a comment. Record it in the PR
 description or the ledger instead, or don't defer it, do it now. Never delete a comment a human
-wrote unless the code it describes is gone.
+wrote unless the code it describes is gone. Where comments are allowed, [craft.md](craft.md)'s H2
+says which kinds production code actually carries and how dense the house runs them.
 
 **L9: names are specific, not redundant.** `get_data()` says nothing;
 `get_active_subscriptions_for_user()` says everything. Equally, a name repeating context the module
@@ -374,12 +398,17 @@ L13. Don't use this rule to expand the diff.
 
 **L18: one logical change.** Small and single-purpose. A change doing two things is two changes.
 
-**L19: commit format.** `<type>(<scope>): <subject>`, scope optional, subject under 50 characters,
-present tense and imperative ("add," not "added"), no trailing period, and the message communicates
-*why*. Types: `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`, `build`, `ci`, `perf`,
-`revert`. A breaking change adds `!` after the type.
+**L19: commit format follows the house.** Read the fingerprint ([craft.md](craft.md), H1) and
+match the repository's own history: its prefix convention, mood, capitalization, trailing-period
+habit, issue-reference style and trailers. Conventional Commits (`feat(scope): …`) are used only
+when the history already uses them. Across 756,498 pre-2020 commits in 22 production projects they
+appear in 0–4% of commits (see [research.md](research.md), F3). With no signal from the history:
+`area: imperative summary`, at most 50 characters (72 hard), no trailing period, then a body
+wrapped at 72 that says what was wrong, why this change fixes it, and any alternative rejected. H10
+covers what the message must not look like.
 
-**L20: branch format.** `author/type/description`, e.g. `john/fix/login-bug`.
+**L20: branch format follows the house.** Match the naming of existing branches (`git branch -r`).
+With no signal: `author/type/description`, e.g. `john/fix/login-bug`.
 
 **L22: evidence before done.** The change is run, the existing behavior around it is checked for
 regressions, and the output is real. "Should work" is not a verification.

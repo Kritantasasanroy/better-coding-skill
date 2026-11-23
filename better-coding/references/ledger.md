@@ -14,13 +14,13 @@ lives in that skill's own `SKILL.md`.
 
 ## SELF-CHECKED is not CLEAN
 
-In `lite` mode, Phase 4 rounds get judged by the Builder's own self-check instead of an independent
-Warden. Record the source of every round's verdict, `warden` or `self-check`, and never let a
-self-checked round be reported, summarized, or remembered as CLEAN, that word is reserved for an
-independent Warden verdict. A self-check that finds nothing is recorded as SELF-CHECKED: no issues
-found, which is weaker evidence than CLEAN and the ledger should read that way. Phase 8's gate audit
-is always `warden`-sourced regardless of the mode the rest of the session ran in; if the final round
-in the ledger says `self-check`, the loop isn't actually done yet.
+In `lite` mode, Phase 4 rounds are judged by the Writer's own self-check instead of the Reviewer.
+Record the source of every round's verdict: `reviewer`, `self-check`, or `auditor`. Never let a
+self-checked round be reported, summarized or remembered as CLEAN. That word is reserved for an
+independent agent's verdict. A self-check that finds nothing is recorded as "SELF-CHECKED: no issues
+found", which is weaker evidence than CLEAN, and the ledger should read that way. Phase 8's gate is
+always `auditor`-sourced, whatever mode the rest of the session ran in. If the last verdict in the
+ledger isn't the Auditor's, the loop isn't done.
 
 ## Penalty schedule
 
@@ -38,7 +38,7 @@ Escalation, applied per round:
   rounds already failed to teach it; a third won't either.
 - **15+ points in one round**, the whole slice returns to the design phase. Points concentrated like
   that are a design failure, not a coding failure, most often a missed or wrong L25 domain model.
-- **A contested MINOR the Warden upholds**, counts double. Contesting is not free.
+- **A contested MINOR the Reviewer upholds**, counts double. Contesting is not free.
 - **Two consecutive rounds with no reduction in open violations**, circuit breaker, escalate.
 
 ## The revert penalty
@@ -68,31 +68,41 @@ being one line among thirty and becomes an active constraint on the next thing w
 
 Baseline: <branch> @ <sha> | tree at start: clean | dirty (<files, untouchable>)
 Mode: lite | full | deep | Precedence mode: <project wins | Law wins | hand in hand>
+Fingerprint: ~/.claude/better-coding/state/<repo-slug>/fingerprint.md
 
 ## Standing Orders
 - [L25] Non-trivial feature work starts with a written domain model, not a class. (broken R1, R2, 2x points)
 
-## Round 2 (warden, full mode)
-Warden: VIOLATIONS
+## Round 2 (reviewer, full mode)
+Reviewer: VIOLATIONS
 | ID | Severity | Location | Points | State |
 | --- | --- | --- | --- | --- |
 | C1 | CAPITAL | src/billing/plan.py:19 | 10 | fixed, stashed and rewritten without `dict[str, Any]` |
 | L26 | MAJOR | src/billing/plan_manager.py | 5 | fixed, PlanManager split into Plan and PlanRenewal |
 | L29 | MAJOR | src/billing/plan.py:44 | 5 (yagni) | fixed, removed hand-rolled retry loop, stdlib has it |
+| H6 | MAJOR | src/billing/plan.py:12 | 5 | fixed, dropped unrequested `timeout` parameter |
 
-Round total: 20 -> slice returned to design (15+ rule)
+Round total: 25 -> slice returned to design (15+ rule)
 Open: 0
 
-## Verification
+## Verification claims
+The Auditor re-runs every line here and compares. Write the exact command and the exact result.
 - `pytest tests/` — 84 passed
-- `mypy src/` — no issues in 12 files
-- Criterion 2 (renewal transitions SubscriptionStatus correctly) — MET, tested via `/subscriptions/renew`
+- `mypy src/` — Success: no issues found in 12 source files
+- Criterion 2 (renewal transitions SubscriptionStatus correctly) — `pytest tests/test_renew.py::test_renew_moves_past_due_to_active` — passed
 
-## Gate (warden, required regardless of session mode)
-VIOLATIONS -> VIOLATIONS -> CLEAN over 3 rounds, see above; final gate audit was independent, not self-checked.
+## Regression tests seen failing (H11)
+- tests/test_renew.py::test_renew_moves_past_due_to_active — failed on baseline (AssertionError: PAST_DUE != ACTIVE), passes with the fix
+
+## APIs checked (H15)
+- `stripe.Subscription.modify` — .venv/lib/python3.11/site-packages/stripe/_subscription.py:1840 (stripe 7.4.0)
+
+## Gate (auditor, required regardless of session mode)
+Auditor: VIOLATIONS (C4: `mypy src/` claimed clean, reproduced 1 error) -> fixed -> Auditor: CLEAN
+Every verification claim reproduced: MATCH.
 
 ## Final
-Rounds: 4 (3 warden, 1 self-check mid-loop) | Total penalties: 38 | Open: 0 | Verdict: CLEAN
+Rounds: 5 (3 reviewer, 1 self-check mid-loop, 1 auditor re-run) | Total penalties: 53 | Open: 0 | Verdict: CLEAN (auditor)
 ```
 
 ## Reporting

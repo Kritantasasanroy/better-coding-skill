@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Installs the better-coding / better-coding-review Claude Code skills, and optionally the
+# Installs the better-coding / better-coding-review / domain-modelling Claude Code skills and the
+# Reviewer and Auditor subagents, and optionally the
 # cross-tool project files (AGENTS.md, Devin, Kiro) for the repo you're standing in.
 #
 # With no flags: downloads this repo and installs both skills into your user-level Claude Code
@@ -75,8 +76,15 @@ if [ "$SKIP_CLAUDE" = false ]; then
     echo "  - $skill -> $dest"
   done
 
+  AGENTS_DIR="${HOME}/.claude/agents"
+  mkdir -p "$AGENTS_DIR"
+  for agent in better-coding-reviewer better-coding-auditor; do
+    cp "$EXTRACTED_ROOT/agents/$agent.md" "$AGENTS_DIR/$agent.md"
+    echo "  - agent $agent -> $AGENTS_DIR/$agent.md"
+  done
+
   echo ""
-  echo "Done. All three skills are available in every project on this machine now."
+  echo "Done. All three skills, plus the Reviewer and Auditor agents, are available in every project on this machine now."
   echo "Try: /better-coding-review lite   (from inside any repo, in Claude Code)"
 fi
 

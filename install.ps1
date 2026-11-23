@@ -74,7 +74,16 @@ if (-not $SkipClaude) {
         Write-Host "  - $skill -> $dest" -ForegroundColor Green
     }
 
-    Write-Host "`nDone. All three skills are available in every project on this machine now."
+    $AgentsDir = Join-Path $HOME '.claude\agents'
+    New-Item -ItemType Directory -Force -Path $AgentsDir | Out-Null
+    foreach ($agent in @('better-coding-reviewer', 'better-coding-auditor')) {
+        $source = Join-Path $extractedRoot "agents\$agent.md"
+        $dest   = Join-Path $AgentsDir "$agent.md"
+        Copy-Item -Path $source -Destination $dest -Force
+        Write-Host "  - agent $agent -> $dest" -ForegroundColor Green
+    }
+
+    Write-Host "`nDone. All three skills, plus the Reviewer and Auditor agents, are available in every project on this machine now."
     Write-Host 'Try: /better-coding-review lite   (from inside any repo, in Claude Code)'
 }
 

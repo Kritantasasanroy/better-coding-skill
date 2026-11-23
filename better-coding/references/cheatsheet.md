@@ -1,20 +1,21 @@
 # Cheat sheet
 
-A condensed version of `law.md` and `warden.md`'s standing position, for `full`-mode routine chunk
-audits only. This is what gets read instead of the full ~370 lines of `law.md` + `warden.md`, to cut
-the fixed per-spawn overhead that gets paid once per chunk. `deep` mode and Phase 8's mandatory gate
-audit always read the full files, never this, the compression trades detail for cost and the gate is
-the one place that trade isn't allowed.
+A condensed version of `law.md`, `craft.md` and `reviewer.md`'s standing position. The Reviewer
+reads this instead of the full files in two places: a `full`-mode build session (read once, at the
+first round) and the exhaustive chunk pass of `better-coding-review`. It cuts the fixed overhead paid
+on every spawn. `deep` mode and the Auditor always read the full files, never this. The compression
+trades detail for cost, and the final verdict is the one place that trade isn't allowed.
 
-If a finding needs to cite rationale or an example beyond its one-line trigger below, or if
-something in scope doesn't map cleanly onto one of these lines, read the real `law.md` entry for
-that ID before deciding, don't guess from the compression.
+If a finding needs rationale or an example beyond its one-line trigger, or something in scope doesn't
+map cleanly onto one of these lines, read the real `law.md` or `craft.md` entry for that ID before
+deciding. Don't guess from the compression.
 
 ## Standing position (full text, unabridged, this part doesn't compress)
 
-The code is the evidence, not the Builder's claims about it. No praise, findings and a verdict only.
+The code is the evidence, not the Writer's claims about it. No praise, findings and a verdict only.
 No padding, a finding needs a location and a rule or it doesn't go in the report. No softening for
-"consistent with existing bad code." Don't negotiate precedence, apply the mode you were given.
+"consistent with existing bad code" under the Law. Under Craft, the house *is* the standard: judge
+H-rules against the fingerprint, not your taste. Don't negotiate precedence, apply the mode you were given.
 Triage's leads are a starting point, verify them, don't just restate them, and don't assume the rest
 of your scope is clean because some of it came pre-flagged. A lighter model is a cost decision, not
 a license to skim.
@@ -25,7 +26,9 @@ CAPITAL
 - **C1** — any suppression (`# noqa` / `# type: ignore` / `eslint-disable` / `@ts-ignore`) or a bare
   `any`/`Any` anywhere, not just at a boundary.
 - **C2** — a test deleted, skipped, or weakened to make a build pass.
-- **C3** — an `except`/`catch` that swallows an error: empty, bare, or silently returns a default.
+- **C3** — an `except`/`catch` that swallows an error: empty, bare, `except Exception`, or silently
+  returns a default. Not C3: one specific expected exception used as control flow when absence is
+  the intended branch (`except KeyError:` → default).
 
 MAJOR
 - **L3** — a branch you can't name real inputs for, or one that's dead.
@@ -84,7 +87,37 @@ MINOR
 - **L21** — dead code, debug prints, commented-out blocks, stale TODOs, unused imports or variables.
 - **L24** — a small, real defect in code already being touched, left unfixed (bounded by L13).
 
-## Verdict format (unchanged from warden.md, repeated here so nothing else needs opening)
+## Craft (craft.md), judged against the fingerprint
+
+CAPITAL
+- **H16** — a placeholder standing in for real code (`# ... existing code ...`, a stub returning fake
+  data) in work reported as done.
+
+MAJOR
+- **H1** — a convention that differs from the house (naming, error idiom, comment voice and density,
+  doc format, imports, tests, logging). Quote the house example it departs from.
+- **H4** — a new function past the house's p90 length or CCN 10 with no parser / state-machine reason;
+  nesting where a guard clause would flatten it. C `goto` cleanup is idiomatic, not a finding.
+- **H5** — errors not in the language idiom, a broad catch "to be safe", or a message with no context.
+- **H6** — a parameter, flag, option, env var, retry, timeout, fallback or `try` the task didn't need.
+- **H7** — five-plus lines pasted from or near-duplicating existing code instead of reusing or moving it.
+- **H11** — a bug fix with no test that would have caught it, or no record that it was seen failing.
+- **H14** — an internal invariant re-validated as a runtime branch with invented fallback behavior.
+- **H15** — an external API call with no evidence it exists in the installed version.
+- **H16** — text addressed to a chat, changelog notes in code, invented example values, debug output.
+
+MINOR
+- **H2** — narration comments as a habit (judge density: ~1 per 25 new lines or consecutive trivial
+  labels), comments restating names, density outside the house band.
+- **H3** — doc comments not in the house form, or boilerplate Args/Returns on trivial private helpers.
+- **H8** — versioned or hype names (`_v2`, `Improved…`), or placeholders (`data`, `result`) in wide scopes.
+- **H9** — reformatting, re-wrapping or import reordering of lines the change didn't need.
+- **H12** — print/console output in library code; emoji, banners or exclamations in logs or errors.
+- **H13** — a marker not in the house form (`TODO(owner)` where the house uses owners) or with no condition.
+
+In a whole-repository pass, H9, H10, H11 and H15 are N/A (they concern a change in progress).
+
+## Verdict format (unchanged from reviewer.md, repeated here so nothing else needs opening)
 
 ```
 VERDICT: CLEAN | VIOLATIONS | BLOCKED

@@ -8,7 +8,7 @@ the real concept was never identified. Code follows the model, not the other way
 
 Objects, not functions: no free function deriving something from a type, no transform pipeline over
 anonymous data, no module-level state. Behavior lives on the type that owns the data. Classes are
-nouns, methods are verbs.
+nouns, methods are verbs. In C, Go and Rust the language idiom (functions or methods on a struct) is the equivalent, and that's what to follow there.
 
 Minimize branching: an `if`/`else` isn't free, check first whether the real shape is polymorphism, a
 guard clause, or an exhaustive match. Nested conditionals past one level are presumed wrong. A branch
@@ -32,6 +32,41 @@ and what the caller sees, nothing swallowed; search for an existing solution bef
 abstraction or dependency; tests assert real observable behavior, mock third-party boundaries only;
 comments explain why, never what, and only if this project allows comments at all; names are
 specific, not generic, and not redundant with their own module; validate once, at the boundary.
+
+## Write it the way this house would have (Craft)
+
+Measured from 756k pre-2020 commits and 3.1M lines of production code in 22 projects (Linux, Git,
+Go, PostgreSQL, Redis, SQLite, Django, Rails, Kubernetes and others). Full rules and evidence: the
+`better-coding` skill's `craft.md` and `research.md`.
+
+- Match the house first. Read three neighboring files and `git log` for the paths you touch, then
+  copy their naming, error idiom, comment density and voice, doc format, logging and test layout.
+  Your preference loses to the house's convention.
+- Small diffs. Production commits had a median of 5 to 22 changed source lines in 1 to 2 files. Don't
+  reformat, re-wrap or reorder lines you didn't need to touch.
+- Comments carry what code can't: units, sentinel values, invariants, ordering assumptions, why the
+  obvious approach is wrong, RFC or issue references. A rare section label is normal. Narrating
+  every step ("# Initialize the counter", "# Step 1:") is not.
+- Functions are as small as the house writes them: median 3 to 9 lines in Python, Java, Ruby, Go and
+  JS, and 12 to 16 in C. Use early returns, keep nesting shallow, and treat complexity above 10 as
+  rare.
+- Errors follow the language idiom: narrow exceptions, context in the message (`parsing %q: %v`),
+  no broad catch "to be safe". Catching one specific expected exception as a normal branch
+  (`except KeyError:` meaning "use the default") is fine.
+- Nothing speculative: no parameters, flags, env vars, retries, timeouts, fallbacks or `try` blocks
+  the task didn't need.
+- Reuse or move existing code. Don't paste near-duplicates.
+- A bug fix comes with the test that would have caught it.
+- Every external API you call exists in the version the repo actually uses. Check the installed
+  source, not memory.
+- No assistant artifacts: no `# ... existing code ...` placeholders, no comments addressed to a chat
+  ("as requested", "updated to fix"), no changelog notes in code, no `example.com` or `your-api-key`
+  values, no emoji in logs, no `_v2` / `Improved…` / `Enhanced…` names.
+- Commit messages copy the repo's history: its prefix style, mood and trailers. With no signal, use
+  `area: imperative summary` (50 chars, no period), then a wrapped prose body saying what was wrong
+  and why this fixes it. Use Conventional Commits only if the history already does (0 to 4% of
+  pre-2020 commits used them). No bullet inventories, emoji, or words like comprehensive, robust,
+  seamless, leverage or enhance.
 
 If this project already has its own rules with different conventions, those win wherever they
 disagree with anything above, this file fills gaps, it doesn't override a decision the project

@@ -1,150 +1,108 @@
 ---
 name: better-coding-review
 description: >
-  Audit an entire existing codebase, at any size, against the same rule set better-coding enforces
-  while writing new code: domain modeling, object-oriented design, strict typing, and
-  over-engineering. Scopes the repository first, files then lines then the important subset (code,
-  not tests or docs), runs a free mechanical triage across all of it, then a single exhaustive lite
-  pass reads every important file once, on the cheapest model, and produces one master requirements
-  table. full/deep modes never re-scan the repository, they spend independent review only on
-  confirming what lite flagged as ambiguous, then fix. Produces a detailed compliance report, then
-  asks the user whether to launch a fixing pass. Negotiates precedence against the project's own
-  AGENTS.md/CLAUDE.md instead of assuming it. Checkpoints the goal, chunk agenda, and per-chunk
-  completion to disk as each chunk finishes, so an audit interrupted by a context limit or
-  disconnection resumes at the next unfinished chunk instead of re-scanning from the start. Use when
-  the user wants a codebase audited, reviewed for compliance, checked for over-engineering, wants to
-  resume an interrupted audit, or asks "how compliant is this repo" / "audit this codebase" /
-  "what's not following our standards." A missing-domain-model finding (L25) routes, on approval, to
-  domain-modelling before better-coding's own fixing loop touches the implementation.
+  Audit an entire existing codebase, at any size, against the same standards better-coding enforces
+  while writing: the Law (domain modeling, object-oriented design, strict typing, error honesty,
+  over-engineering) and Craft (does the code read like the house's own production code, per a study
+  of pre-2020 human-written code: house conventions, function shape, idiomatic errors, sparse
+  why-comments, no duplication, no assistant artifacts). Uses exactly three agents: the Writer (you)
+  scopes, triages and compiles; Reviewers read every important file exactly once on a cheap model;
+  the Auditor confirms what the Reviewers flagged or couldn't settle. Produces a full compliance
+  report, then asks before fixing anything; fixes run through better-coding's own Writer, Reviewer
+  and Auditor loop. lite/full/deep modes, resumable per chunk. Use when the user wants a codebase
+  audited, reviewed for compliance or AI-generated code smells, checked for over-engineering, or
+  asks "how compliant is this repo" / "audit this codebase" / "what's not following our standards".
 argument-hint: "[lite|full|deep]"
 ---
 
 # better-coding-review
 
-`better-coding` enforces the Law while code is being written. This skill enforces it against code
-that already exists, code nobody wrote under that loop, code from before it existed, code from
-another contributor, a whole repository nobody has audited yet, at whatever size that repository
-actually is.
+`better-coding` enforces the Law and Craft while code is being written. This skill enforces them
+against code that already exists: code from before the loop existed, from other contributors, or
+from AI assistants, at whatever size the repository is.
 
-It does two things, in order, and never skips the gap between them: it reports, in full, before it
-touches anything. Fixing only starts on the user's explicit word.
+It does two things, in order, and never skips the gap between them. It reports, in full, before it
+touches anything. Fixing starts only on the user's explicit word.
 
-Read the shared rule set from the paired skill when the phase that needs it begins:
+Everything it uses lives in the sibling `better-coding` skill. Read each file when the phase that
+needs it begins:
 
-- `../better-coding/references/law.md`: the enforceable rules, each with a stable ID.
-- `../better-coding/references/triage.md`: the mechanical pass, the scoping/exclusion rules, the
-  chunking algorithm, and the coverage map, this is what makes a repository's size a non-issue.
-- `../better-coding/references/cheatsheet.md`: the condensed rule set the exhaustive `lite` pass
-  reads instead of the full files.
-- `../better-coding/references/warden.md`: the auditor's brief, handed to the Warden verbatim.
-- `../better-coding/references/ledger.md`: used only in the fixing pass, never in the audit itself.
-- `../domain-modelling/SKILL.md`: the interactive session L25 findings route to during the fixing
-  pass (Phase 7), never during the audit itself.
+- `../better-coding/references/law.md` and `craft.md`: the rules.
+- `../better-coding/references/triage.md` and `../better-coding/scripts/triage.py`: the mechanical
+  pass, scoping and chunking.
+- `../better-coding/scripts/fingerprint.py`: the house conventions Craft is judged against.
+- `../better-coding/references/reviewer.md` and `cheatsheet.md`: the Reviewer's brief and the
+  condensed rules.
+- `../better-coding/references/auditor.md`: the Auditor's brief.
+- `../better-coding/references/ledger.md`: the fixing pass only.
+- `../domain-modelling/SKILL.md`: where L25 findings go in the fixing pass.
 
-If `better-coding` isn't installed alongside this skill, stop and tell the user, this skill depends
-on it for the rule set, the triage patterns, and the fixing loop. `domain-modelling` isn't required
-to audit or report, only to fix an L25 finding properly; if it isn't installed, say so when Phase 7
-reaches such a finding rather than silently falling back to a lighter self-authored model.
+If `better-coding` isn't installed alongside this skill, stop and tell the user.
 
-## The roles
+## Exactly three agents
 
-You are the **Builder** during the fixing pass, same as in `better-coding`. During the audit itself
-you are closer to a dispatcher: you scope, triage, run the base pass, spawn confirmation Wardens
-only where the base pass couldn't settle something, and compile what they report. You still do not
-soften, drop, or pre-filter a finding before it reaches the user.
+| Agent | Job here |
+| --- | --- |
+| **Writer** (you) | Scope, fingerprint, triage, chunk, dispatch, compile the report, ask the user, and, if approved, fix through `better-coding`'s loop |
+| **Reviewer** (`better-coding-reviewer`) | The exhaustive base pass: one instance per chunk, cheapest model, reads every file in its chunk in full, returns a row per file per applicable rule |
+| **Auditor** (`better-coding-auditor`) | Confirmation: resolves every row a Reviewer marked Ambiguous or flagged MAJOR/CAPITAL; in `deep` mode, also re-checks a sample of Clean rows; strongest model |
 
-## The pipeline: read once, confirm the ambiguous part, then fix
+Running several Reviewer instances at once, one per chunk, is still one agent role: same brief, same
+rules, different scope. No other kind of agent is spawned. If the named subagent types aren't
+installed, use `general-purpose` with the same brief, and say so once.
 
-Every mode starts the same way: scope the repository, triage it, then run one exhaustive `lite`
-pass that reads every important file exactly once and produces a single master table. Modes differ
-only in what happens *after* that table exists, not in how the repository gets read:
+You don't soften, drop or pre-filter a finding before it reaches the user.
 
-- **`lite`** (base pass, always runs first, in every mode): no mode-specific work beyond it. The
-  table itself, with the coverage tier and a real, cheap-model judgment call on every row, is the
-  deliverable. Cheapest, and honest about what a cheap model's judgment is worth, rows it marks
-  ambiguous are exactly the ones it wasn't confident enough to call.
-- **`full`** (default): takes `lite`'s table as input, never re-reads the repository from scratch.
-  Spawns targeted, stronger, independent Warden confirmation passes only on the rows `lite` marked
-  **Ambiguous** or **Flagged**, using the full `law.md`/`warden.md` now that the scope is a small,
-  specific set of locations rather than the whole codebase. Confirmed findings get offered for
-  fixing.
-- **`deep`**: everything `full` does, plus a spot-check: an independent Warden re-verifies a sample
-  of `lite`'s **Clean** rows too, since a cheap model's confident "nothing here" is exactly the kind
-  of false negative worth catching before calling anything exhaustive. This is the only mode that
-  spends tokens re-looking at what the base pass already called clean.
+## The pipeline: read once, confirm the uncertain part, then fix
 
-This is the whole point of doing the exhaustive read exactly once: `full` and `deep` cost scales
-with how much `lite` was actually unsure about, not with repository size, because they're never
-re-deriving their own view of the codebase, they're resolving `lite`'s.
+Every mode starts the same way: scope, fingerprint, triage, then one exhaustive Reviewer pass that
+reads every important file exactly once and produces one master table. Modes differ only in what
+happens after that table exists:
+
+- **`lite`**: the table is the deliverable. Rows the Reviewers marked Ambiguous stay Ambiguous, and
+  the report says so.
+- **`full`** (default): the Auditor confirms every Ambiguous row and every MAJOR/CAPITAL Finding.
+  Clean rows are trusted as read.
+- **`deep`**: everything in `full`, plus the Auditor re-checks a random ~10% of Clean rows to catch
+  cheap-model false negatives.
+
+`full` and `deep` never re-read the repository from scratch. Their cost scales with how uncertain
+the base pass was, not with repository size.
 
 ## Precedence is negotiated, not assumed
 
-Same mechanism as `better-coding`, run it here too since this skill may be the first thing invoked
-in a session. Check for the project's own instruction files (`AGENTS.md`, `CLAUDE.md`, a doctrine
-file, `.cursorrules`). If any exist, ask the user once, with `AskUserQuestion`: project wins, Law
-wins, or hand in hand. Record the answer for this session only, nothing is written to disk, and
-don't ask again once it's decided, including on a later conflict, that's resolved by the standing
-choice.
+Same as `better-coding`: check for `AGENTS.md`, `CLAUDE.md`, a doctrine file, `.cursorrules`,
+`CONTRIBUTING.md`. If any exist, ask once with `AskUserQuestion` (project wins / Law wins / hand in
+hand). Record it at the top of the report, for this session only.
 
-## State
+## State and checkpoints
 
-Working state lives outside the repository, but **not** in the session scratchpad, a scratchpad is
-scoped to the session that created it, so anything written there is unreachable the moment that
-session ends, a new terminal or a relaunch after a crash gets a different one. That's exactly the
-case an audit spanning a large repository is most likely to hit.
+State lives at `~/.claude/better-coding/state/<repo-slug>/` (slug computed as in `better-coding`):
+`report.md`, updated in place and never rewritten from scratch, plus `fingerprint.md`. If fixing is
+approved, `charter.md`, `ledger.md` and `progress.md` live there too, exactly where `better-coding`
+looks for them.
 
-Instead, per `better-coding`'s State section, state lives at a fixed, repo-keyed location under the
-user's home directory, computed the same way, once, at the start of Phase 0:
-
-```
-~/.claude/better-coding/state/<repo-slug>/report.md
-```
-
-the master table, updated in place as confirmation resolves rows, never rewritten from scratch, and,
-only if the user approves fixing, `charter.md` and `ledger.md` in that same directory, exactly where
-`better-coding` itself would look for them, since the fixing pass in Phase 7 *is* `better-coding`'s
-own loop.
-
-## Progress checkpoints, for resuming after a stop
-
-Same problem as `better-coding`: a session can stop mid-audit, from a context limit, an
-interruption, anything, and the next invocation remembers nothing but what's on disk. `report.md`
-already accumulates in place rather than getting rewritten each phase, so most of the resumability
-work is already there by design. What's missing is the goal and agenda stated upfront, and
-completion tracked per chunk, not just per phase.
-
-At the very top of `report.md`, written in Phase 0 before triage runs, before any real work begins:
+At the very top of `report.md`, written in Phase 0 before any real work:
 
 ```markdown
 # Progress — better-coding-review
 
 ## Goal
-Audit <repo path> for compliance. Mode: <lite | full | deep>. Precedence: <mode>.
+Audit <repo path>. Mode: <lite | full | deep>. Precedence: <mode>.
 
 ## Agenda
-<filled in once Phase 1 computes it: total files -> important files -> lines -> chunk count, then
-the full chunk list by id, each one starting Not started>
+<filled in at Phase 1: files -> important files -> lines -> chunk count, then every chunk by id, each "Not started">
 
 ## Status: NOT STARTED | IN PROGRESS | BLOCKED | DONE
 Last updated: <phase, chunk, timestamp>
 ```
 
-Then, as work actually happens: mark each chunk `Done` in the Agenda's chunk list the moment its
-Warden, or the `lite` pass itself, returns a verdict, not at the end of the whole wave. A wave of 8
-spawned chunks where 3 have already reported back is 3 real checkpoints, not zero, update the file
-as each one lands rather than batching the update until the wave finishes. Phase 4's confirmation
-batches get the same treatment once that phase starts.
+Mark each chunk `Done` the moment its Reviewer returns, not when the wave finishes. Do the same for
+the Auditor's confirmation batches.
 
-**On starting Phase 0**, before running triage: check for an existing `report.md` with `Status`
-other than `DONE`. If found, confirm in one line that the goal still matches, same repo, same mode,
-before resuming, a mismatch means a different task, not a resume, start fresh in that case rather
-than silently overwrite it. When it matches, resume at the first chunk still marked `Not started`
-rather than re-running triage and the `lite` pass against chunks already marked `Done`, those
-results don't need to be earned twice. If no file exists, or `Status` is already `DONE`, start fresh
-normally.
-
-Mark `Status: DONE` once Phase 5's report is actually compiled and, if a fixing pass ran, once
-Phase 7 finishes, the same finish line the loop already has.
+On starting Phase 0, look for an existing `report.md` whose status isn't `DONE`. If the goal matches
+(same repo, same mode), resume at the first chunk still `Not started`. Don't re-run chunks already
+`Done`. A mismatch is a new task.
 
 ---
 
@@ -152,212 +110,181 @@ Phase 7 finishes, the same finish line the loop already has.
 
 ## Phase 0: Precedence and mode
 
-Run the precedence negotiation above and resolve the mode (skill argument, or the user saying so;
-default `full`). Both get recorded at the top of `report.md`.
+Negotiate precedence and resolve the mode (argument or the user's word; default `full`). Write both
+at the top of `report.md`.
 
-## Phase 1: Scope
+## Phase 1: Scope and fingerprint
 
-Two counts, always, reported to the user before anything else: total tracked files, then the
-important subset after applying [triage.md](../better-coding/references/triage.md)'s default
-exclusions (tests, docs, generated output, lockfiles, migrations), then the line count of that
-filtered set specifically, using the safe single-call method, not a per-file loop. State the
-exclusion list explicitly, and that it's overridable if the user wants tests or docs in scope.
+Report to the user before anything else: total tracked source files, then the important subset
+after [triage.md](../better-coding/references/triage.md)'s default exclusions (tests, docs, generated
+output, vendored code, migrations), then the line count of that subset using the single
+`cat | wc -l` method. State the exclusions and that they're overridable.
 
-This is the first line of `report.md`, in every mode: `<total> files -> <n> important
-(<excluded categories>) -> <lines> lines to review.` A report that never states this is a report
-whose completeness can't be checked by anyone reading it.
+This is the first line of the report, in every mode: `<total> files -> <n> important (<excluded
+categories>) -> <lines> lines to review.`
+
+Then fingerprint the house, over the whole repository:
+
+```
+python3 -I <better-coding-dir>/scripts/fingerprint.py <repo-root> > <state-dir>/fingerprint.md
+```
+
+For an audit, H1 asks a specific question: where does code depart from the repository's own
+dominant convention? The fingerprint is that convention.
 
 ## Phase 2: Triage
 
-Run every pattern in [triage.md](../better-coding/references/triage.md) against the important file
-set from Phase 1. One pass, every mode, no agent tokens. The result is near-verdicts (already
-findings) and leads (locations worth a closer look), attached to specific files and lines.
+```
+python3 -I <better-coding-dir>/scripts/triage.py <repo-root> > <state-dir>/triage.md
+```
 
-## Phase 3: The exhaustive lite pass
+One pass, every mode, no agent tokens. Near-verdicts are close to findings. Leads are locations.
+Before trusting a clean triage result, confirm the script found the files you expected (the
+header's file count should match Phase 1's important set).
 
-This runs regardless of mode, it's not something `full`/`deep` skip past, it's what they build on.
+## Phase 3: The exhaustive Reviewer pass
 
-Chunk the important file set per [triage.md](../better-coding/references/triage.md)'s algorithm,
-target **~3000 lines per chunk**: large enough to keep spawn count reasonable, small enough that a
-cheap model reads every file in its chunk in full, not a sample. Unlike `full` mode's old
-triage-narrowed chunks, every chunk here gets completely read, that's what makes this pass
-exhaustive rather than another partial one. Chunk count is just this run's real filtered line count
-divided by 3,000, report the actual number, computed from the actual scope, not a figure carried
-over from a previous audit or a different repository.
+This runs in every mode. It's what `full` and `deep` build on.
 
-Spawn one Warden per chunk, cheapest available model, [cheatsheet.md](../better-coding/references/cheatsheet.md)
-instead of the full `law.md`/`warden.md`:
+Chunk the important file set per [triage.md](../better-coding/references/triage.md): about **3,000
+lines per chunk**, same-directory files together. Report the actual chunk count from this run.
+
+Spawn one Reviewer per chunk, cheapest model, in waves of 6–8 in a single message:
 
 ```
 Agent(
-  subagent_type: "general-purpose",
+  subagent_type: "better-coding-reviewer",   # or "general-purpose" if not installed
   model: "haiku",
-  run_in_background: false,
-  description: "Lite pass: <chunk>",
+  description: "Reviewer: <chunk id>",
   prompt: <the brief below>
 )
 ```
 
-Spawn a wave of up to 6 to 8 chunks together; more chunks than that runs in additional waves.
-
-Pass **absolute** paths, resolved the same way `better-coding`'s Phase 4 resolves them: wherever
-this SKILL.md actually loaded from, sibling to `better-coding` at the same level. If it isn't
-obvious, check both `~/.claude/skills/` and `<repo-root>/.claude/skills/` for
-`better-coding/references/law.md`.
+Pass **absolute** paths, resolved from where this SKILL.md loaded (`~/.claude/skills/` or
+`<repo>/.claude/skills/`).
 
 The brief:
 
-- `Read <better-coding-dir>/references/cheatsheet.md and follow it exactly, that's the rule set and
-  the standing position.`
-- `Audit mode: whole repository, exhaustive base pass. Scope: <this chunk's full file list>.`
-- Triage's near-verdicts and leads within this chunk, so confirmed mechanical findings don't need
-  rediscovering, only judging.
-- `For every rule that applies to every file in scope, return one row: file, line (if applicable),
-  rule ID, and a status of Clean, Finding, or Ambiguous. Ambiguous means you could not confidently
-  call it either way on this pass, not that you skipped it, every file gets a row for every
-  applicable rule, there is no "not reached."`
-- The negotiated precedence mode, and the project's instruction files to read under it.
+- `Read <better-coding-dir>/references/reviewer.md and follow it exactly. Read
+  <better-coding-dir>/references/cheatsheet.md, that's the rule set.`
+- `Review mode: whole repository, exhaustive base pass. Scope: <this chunk's full file list>.`
+- `Read <state-dir>/fingerprint.md: judge Craft against this house.`
+- Triage's near-verdicts and leads inside this chunk.
+- `For every file in scope and every rule that applies to it, return one row: file, line (if
+  applicable), rule ID, and Clean, Finding, or Ambiguous, with evidence for Finding and Ambiguous.
+  Ambiguous means you couldn't call it confidently, not that you skipped it. There is no "not
+  reached."`
+- The precedence mode and the project's instruction files.
 
-Compile every chunk's rows into one master table at `report.md`. This table is the deliverable in
-`lite` mode, and the starting point for everything after it in `full`/`deep`.
+Compile every chunk's rows into one master table in `report.md`, sourced `reviewer`.
 
-## Phase 4: Confirm (full / deep only)
+## Phase 4: The Auditor confirms (full / deep)
 
-`lite` mode stops at Phase 3, skip to Phase 6.
+`lite` stops after Phase 3. Go to Phase 5.
 
-Pull every row marked **Ambiguous** or **Finding** with a MAJOR/CAPITAL severity from the master
-table. Group by proximity (same file or same module first) into batches sized for careful reading,
-not for chunk-size economics, this set is already small because `lite` did the expensive part.
-Spawn one Warden per batch, full rigor:
+Pull every row marked **Ambiguous**, and every **Finding** at MAJOR or CAPITAL. Group them by file or
+module into batches sized for careful reading. Spawn one Auditor per batch, no `model` override
+(strongest), fresh each time:
 
 ```
 Agent(
-  subagent_type: "general-purpose",
-  model: <"haiku" in full mode; omit (inherit default) in deep mode>,
-  run_in_background: false,
-  description: "Confirm: <batch>",
+  subagent_type: "better-coding-auditor",    # or "general-purpose" if not installed
+  description: "Auditor: confirm <batch id>",
   prompt: <the brief below>
 )
 ```
 
-The brief:
+- `Read <better-coding-dir>/references/auditor.md and follow it exactly, in confirmation mode. Read
+  <better-coding-dir>/references/reviewer.md, law.md and craft.md.`
+- `Confirmation mode. You are resolving specific rows an earlier pass marked Ambiguous or Finding.
+  Confirm, overturn, or refine each one, citing the rule and the evidence.`
+- The rows: file, line, rule ID, the Reviewer's call and evidence.
+- `Read <state-dir>/fingerprint.md.` The precedence mode and the project instruction files.
 
-- `Read <better-coding-dir>/references/warden.md and follow it exactly. Read
-  <better-coding-dir>/references/law.md, that's the rule set.` Full files here, not the cheat sheet,
-  this is the confirmation step and it needs the real rationale, not just the trigger line.
-- `Audit mode: confirmation. You are resolving specific rows an earlier cheap-model pass marked
-  Ambiguous or Finding, not scanning fresh. Confirm, overturn, or refine each one with a real
-  verdict, citing the rule and the evidence.`
-- The specific rows assigned to this batch: file, line, rule ID, lite's original call.
-- The negotiated precedence mode, and the project's instruction files to read under it.
+`deep` only: also pull a random ~10% of **Clean** rows and confirm them the same way.
 
-`deep` mode only, additionally: pull a random ~10% sample of rows `lite` marked **Clean**, batch and
-confirm those the same way, to catch cheap-model false negatives. `full` mode trusts `lite`'s Clean
-calls as-is.
+Update the master table in place. Every confirmed row gets the Auditor's verdict and is tagged
+`[auditor-confirmed]`. Untouched rows stay `[reviewer]`.
 
-Update `report.md`'s master table in place: every confirmed row's status becomes the Warden's
-verdict, not `lite`'s original guess, and gets tagged `[lite]` or `[warden-confirmed]` so the report
-never hides which tier actually settled it.
-
-## Phase 5: Compile the final report
+## Phase 5: Compile the report
 
 ```markdown
 # Compliance report — <repo>
 
-Mode: lite | full | deep | Precedence mode: <mode>
+Mode: lite | full | deep | Precedence: <mode>
 Scope: <total files> -> <n important> (<excluded categories>) -> <lines> lines
-Pass: lite (chunk count, model) [-> confirm (batch count, model), deep only: + N% clean-row spot-check]
+Pass: Reviewer (<chunks> chunks, <model>) [-> Auditor (<batches> batches) [+ deep: N% Clean-row check]]
 
 ## Summary
 CAPITAL: <n>  MAJOR: <n>  MINOR: <n>
-Domain models missing (L25): <n features/modules with no written model and no clear one implied by the code>
-Laziness ladder findings (L29): <n>, tagged delete/stdlib/native/yagni/shrink, <est. lines and dependencies removable>
+Law findings: <n>   Craft findings: <n>
+Domain models missing (L25): <n>
+Laziness ladder (L29): <n> — delete/stdlib/native/yagni/shrink/cut, ~<lines and deps removable>
+AI-tell findings (H2, H6, H7, H8, H12, H16): <n>
+
+## House fingerprint
+<the commit and code conventions from fingerprint.md, in a few lines, so a reader knows what
+"matches the house" meant in this report>
 
 ## Requirements checklist
 | File | Rule | Status | Source |
 | --- | --- | --- | --- |
-[one row per file x applicable rule from the master table; this is the literal table Phase 3 built
-and Phase 4 updated, not a re-derived summary of it]
-
-Status is one of: **Clean**, **Finding** (see below), **Ambiguous** (lite mode only, `full`/`deep`
-resolve every Ambiguous row before this report is called final). Source is `lite` or
-`warden-confirmed`. In `full` mode, Clean rows stay sourced `lite`, never independently re-verified,
-say so plainly rather than letting silence imply otherwise.
+[one row per file × applicable rule: the literal master table, not a summary of it]
 
 ## Findings
-[<ID>] <SEVERITY> — <file>:<line> (<module>) [lite | warden-confirmed]
-  Broken: ...
-  Evidence: ...
-  Failure: ...
-  Required: ...
+[<ID>] <SEVERITY> — <file>:<line> (<module>) [reviewer | auditor-confirmed]
+  Broken: …
+  Evidence: …
+  Failure: …
+  Required: …
 
 ## Domain modeling gaps
-<modules or features with no identifiable domain model; classes named FooManager/FooHelper/FooUtils/
-FooProcessor/FooGenerator/FooHandler/FooBuilder/FooEngine/FooCoordinator/FooData/FooInfo, or a class
-named for a verb (ProcessPayment), and what real concept each is likely standing in for; a concept
-never marked general/ours/plumbing, especially a business rule sitting in application/common because
-generalizing it was tempting; layering that's a flat list of peers instead of "every child names its
-parent"; an entity with no decided CRUD semantics — immutability, what delete means, whether it
-should be append-only>
+<modules with no identifiable model; generic-suffix and verb-named classes and what each likely
+stands in for; unmarked general/ours/plumbing; flat layering; undecided CRUD>
+
+## Where the code departs from its own house
+<H1 findings grouped by convention: error idiom, comment density, naming, logging, doc format>
 
 ## Unverified
-<anything neither pass could resolve, and what would be needed to>
+<anything no pass could resolve, and what would resolve it>
 ```
 
-A `lite`-only report keeps every row's status as `Clean`/`Finding`/`Ambiguous` from a single cheap
-pass, and says so in the `Pass` line. Presenting that as equivalent to a confirmed report is C4 by
-another name.
+In `lite` mode, say plainly in the `Pass` line that every row came from one cheap-model pass.
+Presenting that as a confirmed report is C4 by another name. In `full`, Clean rows are
+Reviewer-sourced and never independently re-checked. Say so.
 
 ## Phase 6: Ask before fixing anything
 
-Present the report to the user. Then, only then, ask with `AskUserQuestion` whether to start the
-fixing agent. Do not start fixing on your own judgment, however small the fix looks, this is the one
-step in the whole system that exists specifically to not be automatic.
+Present the report, then ask with `AskUserQuestion` whether to start fixing. Never start on your own
+judgment, however small the first fix looks. If the user declines, stop.
 
-If the user declines, stop. The report stands as delivered; nothing in the repository changes.
+## Phase 7: The fixing pass
 
-## Phase 7: Fixing pass
+On approval, run `better-coding`'s loop at `full` rigor or better, whatever mode produced the report.
+That loop uses the same three agents: you write, a Reviewer checks each slice, and a fresh Auditor
+gates the end.
 
-If the user approves, hand off to `better-coding`'s own phases, reusing its ledger mechanics
-exactly, at `full` rigor or better regardless of what mode produced the report, an unconfirmed
-`Ambiguous` row is a reason to look, not evidence a fix is correct once you're actually changing the
-code:
-
-- Group findings into slices the same way `better-coding` Phase 2 would, one coherent change per
-  slice, a CAPITAL finding and the file it's in is usually its own slice.
-- Where a finding is really a missing domain model (L25) rather than a code defect, that slice starts
-  with `domain-modelling`, run against the existing code and behavior this repository already has,
-  not a from-scratch feature interview — its Phase 3 ("read the repo, and be willing to change it")
-  is exactly built for auditing what exists before remodeling it. Only once it produces a design (or
-  the engineer explicitly opts for a same-session self-authored model, for a gap too small to justify
-  the full session) does `better-coding` Phase 3 touch the implementation.
-- Run `better-coding` Phase 3 through 8 for each slice: triage, build the fix, audit in diff mode
-  this time (not whole-repository mode, you're now working a specific change against a specific
-  baseline), sentence, remediate, verify, gate.
-- The charter's acceptance criteria are the report's findings for this slice going to zero, plus
-  whatever tests or checks already covered that code.
-- Continue until every confirmed finding is resolved, contested-and-upheld findings get fixed too,
-  or escalated per the circuit breaker below.
+- Write the charter: the acceptance criteria are the report's confirmed findings for each slice
+  going to zero, plus whatever tests already cover that code.
+- Group findings into slices of one coherent change each. A CAPITAL finding and its file is usually
+  its own slice. Keep the house's commit size (H9, L18). A repo-wide style sweep is not one slice.
+- A finding that's really a missing domain model (L25) starts with `domain-modelling`, run against
+  the existing code (its Phase 3 is built for that), before any implementation changes.
+- An unconfirmed Ambiguous row is a reason to look, not evidence a fix is right.
+- Run `better-coding` Phases 3–8 for each slice.
 
 ## Circuit breaker
 
-Stop and escalate, with whatever's been fixed so far and what remains, when:
-
-- The same rule has been broken three times during the fixing pass.
-- A finding needs a decision only the user can make, most often when fixing it would change a public
-  API or a persisted data shape.
-- Something external blocks the work: missing credentials, a broken dependency, an unavailable
-  service.
-- Two consecutive rounds produce no reduction in open findings.
+Stop and escalate, with what's fixed and what remains, when the same rule breaks three times in the
+fixing pass, a fix needs a decision only the user can make (a public API or persisted data shape),
+something external blocks the work, two consecutive rounds don't reduce open findings, or the
+Auditor fails the gate three times.
 
 ## Never
 
-- Starting the fixing pass without the user's explicit go-ahead, regardless of how confident the
-  audit was or how small the first finding looks.
-- Softening, cutting, or reordering a finding to make the report look better before the user sees it.
-- Calling a report final while any row is still `Ambiguous` in `full`/`deep` mode, or presenting a
-  `lite`-only report without stating, plainly, that every row came from one cheap-model pass.
-- Re-scanning files `lite` already covered instead of working from the master table, that's the
-  entire efficiency case for this pipeline, and skipping it defeats the purpose of Phase 3.
-- Marking a finding resolved without the same evidence-before-done standard `better-coding` Phase 7
-  requires: a real command, real output, not a description of what should now be true.
+- Start the fixing pass without the user's explicit go-ahead.
+- Soften, cut or reorder a finding to make the report look better.
+- Call a report final while any row is still Ambiguous in `full`/`deep`, or present a `lite` report
+  without saying every row came from one cheap pass.
+- Re-scan files the Reviewer pass already covered instead of working from the master table.
+- Mark a finding resolved without a real command's real output, re-run by the Auditor at the gate.
