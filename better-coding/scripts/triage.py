@@ -5,12 +5,15 @@
     python3 -I triage.py <repo-root> --files a.py b.ts    only these files
     python3 -I triage.py <repo-root> --commit HEAD        also check that commit's message
     options: --include-tests  --max-lines N (default 50)  --max-branches N (default 10)
+             --format markdown|json (default markdown; json is one object for CI to parse)
 
-Prints markdown. Near-verdicts are close to findings on their own; leads need judgment.
+Near-verdicts are close to findings on their own; leads need judgment.
 Exit status is 0 whether or not anything was found: triage informs, it doesn't gate.
 """
 import argparse
 import ast
+import collections
+import json
 import os
 import re
 import shutil
@@ -26,6 +29,9 @@ EXCLUDE = re.compile(
     r"|(^|/)(test_[^/]*\.py|[^/]*_test\.(py|go)|[^/]*\.(test|spec)\.[jt]sx?|[^/]*Tests?\.java)$"
     r"|\.min\.js$|\.d\.ts$|\.pb\.go$|_pb2\.py$")
 HASH_LANGS = {"py", "rb"}
+TIERS = (("near", "Near-verdicts (fix or confirm)"), ("lead", "Leads (judge, don't auto-fix)"),
+         ("note", "Not measured"))
+Finding = collections.namedtuple("Finding", "tier rule label path line source")
 
 
 class Pattern:
@@ -198,7 +204,7 @@ def scan_patterns(path, text, lang, allowed, hits):
             if key in seen:
                 continue
             seen.add(key)
-            hits.append((pat.tier, pat.rule, pat.label, path, n, src.strip()[:140]))
+            hits.append(Finding(pat.tier, pat.rule, pat.label, path, n, src.strip()[:140]))
 
 
 class PyFunctionShape(ast.NodeVisitor):
@@ -252,7 +258,7 @@ def scan_shape(path, text, lang, allowed, args, hits, lizard_paths):
     try:
         tree = ast.parse(text)
     except (SyntaxError, ValueError):
-        hits.append(("lead", "H4", "could not parse (shape unmeasured)", path, 1, ""))
+        hits.append(Finding("lead", "H4", "could not parse (shape unmeasured)", path, 1, ""))
         return
     shape = PyFunctionShape(text.split("\n"))
     shape.visit(tree)
@@ -267,8 +273,8 @@ def scan_shape(path, text, lang, allowed, args, hits, lizard_paths):
         if depth > 3:
             reasons.append(f"nesting depth {depth}")
         if reasons:
-            hits.append(("lead", "H4/L16", "function shape: " + ", ".join(reasons), path, lineno,
-                         f"def {name}"))
+            hits.append(Finding("lead", "H4/L16", "function shape: " + ", ".join(reasons),
+                                path, lineno, f"def {name}"))
 
 
 def scan_lizard(root, paths, args, hits):
@@ -277,8 +283,8 @@ def scan_lizard(root, paths, args, hits):
         return
     if not lizard:
         langs = sorted({SOURCE_EXT[os.path.splitext(p)[1]] for p in paths})
-        hits.append(("note", "H4", "function shape not measured for " + ", ".join(langs) +
-                     " (install `lizard` to measure); judge it by reading", "-", 0, ""))
+        hits.append(Finding("note", "H4", "function shape not measured for " + ", ".join(langs) +
+                            " (install `lizard` to measure); judge it by reading", "-", 0, ""))
         return
     proc = subprocess.run([lizard, "--csv"] + [os.path.join(root, p) for p in paths],
                           capture_output=True, text=True, errors="replace")
@@ -294,8 +300,8 @@ def scan_lizard(root, paths, args, hits):
         if ccn > args.max_branches:
             reasons.append(f"CCN {ccn}")
         if reasons:
-            hits.append(("lead", "H4/L16", "function shape: " + ", ".join(reasons),
-                         os.path.relpath(cols[6], root), int(cols[9]), cols[7]))
+            hits.append(Finding("lead", "H4/L16", "function shape: " + ", ".join(reasons),
+                                os.path.relpath(cols[6], root), int(cols[9]), cols[7]))
 
 
 def scan_orphans(root, scope_texts, all_paths, hits):
@@ -320,8 +326,8 @@ def scan_orphans(root, scope_texts, all_paths, hits):
             continue
         if n <= 1:
             path, line = defined[name]
-            hits.append(("lead", "L31", "orphan-class candidate (name appears once)", path, line,
-                         "class " + name))
+            hits.append(Finding("lead", "L31", "orphan-class candidate (name appears once)",
+                                path, line, "class " + name))
 
 
 def check_commit(root, rev, hits):
@@ -331,19 +337,50 @@ def check_commit(root, rev, hits):
     lines = msg.split("\n")
     subject = lines[0]
     if len(subject) > 72:
-        hits.append(("near", "H10", f"subject is {len(subject)} chars (> 72)", "commit " + rev, 1, subject))
+        hits.append(Finding("near", "H10", f"subject is {len(subject)} chars (> 72)",
+                            "commit " + rev, 1, subject))
     body = [l for l in lines[2:] if l.strip() and not re.match(r"^[A-Z][\w-]+: ", l)]
     if sum(bool(re.match(r"^\s*[-*•]\s", l)) for l in body) >= 3:
-        hits.append(("lead", "H10", "body is a bullet list", "commit " + rev, 0, ""))
+        hits.append(Finding("lead", "H10", "body is a bullet list", "commit " + rev, 0, ""))
     if any(re.match(r"^#+\s|\*\*", l) for l in body):
-        hits.append(("lead", "H10", "markdown headings/bold in commit body", "commit " + rev, 0, ""))
+        hits.append(Finding("lead", "H10", "markdown headings/bold in commit body",
+                            "commit " + rev, 0, ""))
     if any(len(l) > 76 for l in body):
-        hits.append(("lead", "H10", "body not wrapped at ~72", "commit " + rev, 0, ""))
+        hits.append(Finding("lead", "H10", "body not wrapped at ~72", "commit " + rev, 0, ""))
     if re.search("[\U0001F300-\U0001FAFF☀-➿]", msg):
-        hits.append(("near", "H10", "emoji in commit message", "commit " + rev, 0, ""))
+        hits.append(Finding("near", "H10", "emoji in commit message", "commit " + rev, 0, ""))
     words = sorted({w.lower() for w in AI_WORDS.findall(msg)})
     if words:
-        hits.append(("lead", "H10", "AI-register vocabulary: " + ", ".join(words), "commit " + rev, 0, ""))
+        hits.append(Finding("lead", "H10", "AI-register vocabulary: " + ", ".join(words),
+                            "commit " + rev, 0, ""))
+
+
+class Report:
+    def __init__(self, findings, file_count, diff):
+        self.findings = findings
+        self.file_count = file_count
+        self.diff = diff
+
+    def tier(self, name):
+        rows = [f for f in self.findings if f.tier == name]
+        return sorted(rows, key=lambda f: (f.rule, f.path, f.line))
+
+    def to_markdown(self):
+        lines = [f"# Triage: {self.file_count} files in scope"
+                 + (f" (lines added since {self.diff})" if self.diff else "")]
+        for tier, title in TIERS:
+            rows = self.tier(tier)
+            lines += ["", f"## {title}: {len(rows)}"]
+            for f in rows:
+                loc = f"{f.path}:{f.line}" if f.line else f.path
+                src = f" — `{f.source}`" if f.source else ""
+                lines.append(f"- [{f.rule}] {loc} — {f.label}{src}")
+        return "\n".join(lines)
+
+    def to_json(self):
+        findings = [f._asdict() for tier, _ in TIERS for f in self.tier(tier)]
+        return json.dumps({"files_in_scope": self.file_count, "diff_base": self.diff,
+                           "findings": findings}, indent=2)
 
 
 def main():
@@ -355,6 +392,7 @@ def main():
     ap.add_argument("--include-tests", action="store_true")
     ap.add_argument("--max-lines", type=int, default=50)
     ap.add_argument("--max-branches", type=int, default=10)
+    ap.add_argument("--format", choices=("markdown", "json"), default="markdown")
     args = ap.parse_args()
     root = os.path.abspath(args.root)
 
@@ -388,15 +426,8 @@ def main():
     if args.commit:
         check_commit(root, args.commit, hits)
 
-    print(f"# Triage: {len(texts)} files in scope"
-          + (f" (lines added since {args.diff})" if args.diff else ""))
-    for tier, title in (("near", "Near-verdicts (fix or confirm)"),
-                        ("lead", "Leads (judge, don't auto-fix)"), ("note", "Not measured")):
-        rows = [h for h in hits if h[0] == tier]
-        print(f"\n## {title}: {len(rows)}")
-        for _, rule, label, path, line, src in sorted(rows, key=lambda h: (h[1], h[3], h[4])):
-            loc = f"{path}:{line}" if line else path
-            print(f"- [{rule}] {loc} — {label}" + (f" — `{src}`" if src else ""))
+    report = Report(hits, len(texts), args.diff)
+    print(report.to_json() if args.format == "json" else report.to_markdown())
 
 
 if __name__ == "__main__":

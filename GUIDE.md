@@ -167,6 +167,7 @@ python3 -I $S/triage.py . --diff main --commit HEAD    # also check the last com
 python3 -I $S/triage.py . --files src/app.py           # specific files
 python3 -I $S/triage.py . --include-tests              # include tests
 python3 -I $S/triage.py . --max-lines 35 --max-branches 8
+python3 -I $S/triage.py . --diff main --format json    # one JSON object, for CI to parse
 
 python3 -I $S/fingerprint.py .                         # the repo's house conventions
 python3 -I $S/fingerprint.py . src/billing             # scoped to a path
@@ -175,7 +176,10 @@ python3 -I $S/fingerprint.py . src/billing             # scoped to a path
 Triage output has two tiers. **Near-verdicts** (a suppression comment, a swallowed error, a
 `# ... existing code ...` placeholder) are close to findings on their own. **Leads** (an `Optional`,
 a long function, a `Manager` class) are places to look, not verdicts. Triage informs and never
-fails a build: it always exits 0.
+fails a build: it always exits 0. With `--format json` the output is one object with
+`files_in_scope`, `diff_base` and a `findings` list (each with `tier`, `rule`, `label`, `path`,
+`line`, `source`), so a CI step decides for itself what to do with it, for example failing on any
+finding in the `near` tier.
 
 ## 8. Using it in other tools
 

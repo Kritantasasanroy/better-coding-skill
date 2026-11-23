@@ -15,6 +15,7 @@ python3 -I <skill-dir>/scripts/triage.py <repo-root> --diff <baseline-ref>   # a
 python3 -I <skill-dir>/scripts/triage.py <repo-root> --files <path> ...      # specific files
 python3 -I <skill-dir>/scripts/triage.py <repo-root>                         # whole repo, important set
 python3 -I <skill-dir>/scripts/triage.py <repo-root> --diff <base> --commit HEAD   # also the message
+python3 -I <skill-dir>/scripts/triage.py <repo-root> --diff <base> --format json    # for CI to parse
 ```
 
 Standard library only, Python 3.8+. In `--diff` mode it reports only lines added since the
