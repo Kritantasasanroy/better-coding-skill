@@ -327,6 +327,12 @@ the fingerprint, or the precedence mode. "It reads better" doesn't count. If the
 it, it gets fixed and counts double. Fixing means removing the cause. Silencing the check is CAPITAL,
 and triage will catch it next slice.
 
+If a fix changes the design (a type added, a concept split, a responsibility moved), amend the
+charter's domain model **before** the next review, as a dated section that says what changed and
+why. Keep the original text and never touch the acceptance criteria (C5). A model that no longer
+describes the code fails the Auditor's L25 check, and the Reviewer, who only sees the diff, won't
+catch it.
+
 ## Phase 7: Verify, then commit the slice
 
 Run the real things and keep the real output: tests, linter, type checker, build. Walk the charter
@@ -338,7 +344,10 @@ will re-run each one, and a claim that doesn't reproduce is C4.
 
 When the Reviewer's verdict for this slice is CLEAN (or SELF-CHECKED in `lite`) and verification
 passes, commit the slice with a message written per L19 and H10, matching the fingerprint's commit
-section. Then check it:
+section. Stage the files you changed **by name**, and read `git status --short` before committing.
+Never `git add -A` or `git add <directory>`: your own verification can leave `__pycache__`, build
+output or scratch files behind, and a binary in a commit is a finding (L21, L13). Then check the
+message:
 
 ```
 python3 -I <skill-dir>/scripts/triage.py <repo-root> --diff HEAD~1 --commit HEAD
@@ -371,6 +380,9 @@ brief:
 - Paths to `fingerprint.md`, `charter.md` (with "Criteria as first written") and the domain model.
 - The ledger's **Verification claims**, **Regression tests seen failing** and **APIs checked**
   sections, verbatim, and nothing else from the ledger. No findings history, no Reviewer verdicts.
+  Write them to `<state-dir>/auditor_claims.md` **at spawn time**, extracted from the ledger as it
+  is then, and re-extract before every later gate. A claims file written earlier goes stale when
+  the code changes, and a stale claim is a false claim.
 - The precedence mode and the project instruction files.
 
 The gate opens only when the Auditor returns CLEAN. That means no findings, every verification claim
